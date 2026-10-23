@@ -124,7 +124,7 @@ int ui_colunas_terminal(void)
         }
     }
 #endif
-    /* cppcheck-suppress knownConditionTrueFalse — colunas muda em _WIN32 */
+    // cppcheck-suppress knownConditionTrueFalse
     return colunas > 40 ? colunas : 40;
 }
 

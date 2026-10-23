@@ -158,7 +158,7 @@ void tela_boas_vindas(void)
 
     /* Padding vertical para centralizar */
     topo = (rows - 11) / 2;
-    /* cppcheck-suppress knownConditionTrueFalse — rows muda em _WIN32 */
+    // cppcheck-suppress knownConditionTrueFalse
     if (topo < 1) topo = 1;
     for (i = 0; i < topo; i++) putchar('\n');
 
