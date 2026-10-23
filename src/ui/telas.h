@@ -22,6 +22,18 @@ enum {
     OPCAO_TOTAL
 };
 
+/* Teclas de navegação para navegar_menu() */
+#define KEY_UP    256
+#define KEY_DOWN  257
+#define KEY_LEFT  258
+#define KEY_RIGHT 259
+
+/* Retorna nova seleção (0-8) dado a seleção atual e uma tecla KEY_* */
+int navegar_menu(int selecao, int tecla);
+
+/* Redesenha o menu com a opção `selecao` destacada */
+void desenha_menu(Lista *li, int selecao);
+
 void tela_boas_vindas(void);
 int  tela_menu(Lista *li); /* devolve OPCAO_*; EOF devolve OPCAO_SAIR */
 void tela_inserir(Lista *li);

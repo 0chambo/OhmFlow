@@ -20,7 +20,7 @@
 enum { UI_SUCESSO, UI_ERRO, UI_AVISO, UI_INFO };
 
 /* Estilos de moldura */
-enum { UI_MOLDURA_DUPLA, UI_MOLDURA_SIMPLES };
+enum { UI_MOLDURA_DUPLA, UI_MOLDURA_SIMPLES, UI_MOLDURA_ARREDONDADA };
 
 /* Posição da borda de tabela */
 enum { UI_TAB_TOPO, UI_TAB_MEIO, UI_TAB_BASE };
@@ -31,6 +31,8 @@ enum {
     UI_COR_VERMELHO, UI_COR_VERDE, UI_COR_AMARELO, UI_COR_AZUL,
     UI_COR_MAGENTA, UI_COR_CIANO, UI_COR_BRANCO,
     UI_COR_BORDA, UI_COR_TITULO, UI_COR_DESTAQUE, UI_COR_PROMPT,
+    UI_COR_LARANJA, UI_COR_VERDE_NEON, UI_COR_ROXO_NEON,
+    UI_COR_SOMBRA,
     UI_COR_TOTAL
 };
 
@@ -43,6 +45,7 @@ enum {
 #define UI_SETA        "->"
 #define UI_PONTO       "-"
 #define UI_BARRA       "|"
+#define UI_BULLET      "*"
 #else
 #define UI_ICONE_OK    "\xE2\x9C\x94" /* ✔ */
 #define UI_ICONE_ERRO  "\xE2\x9C\x96" /* ✖ */
@@ -52,6 +55,7 @@ enum {
 #define UI_SETA        "\xE2\x86\x92" /* → */
 #define UI_PONTO       "\xC2\xB7"     /* · */
 #define UI_BARRA       "\xE2\x94\x82" /* │ */
+#define UI_BULLET      "\xE2\x97\x8F" /* ● */
 #endif
 
 /* Estado / configuração */
@@ -65,11 +69,15 @@ const char *ui_cor(int cor);
 /* Tela */
 void ui_limpar_tela(void);
 void ui_pausar(const char *msg);
+int  ui_colunas_terminal(void);
 
 /* Caixas */
 void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
               const char *cabecalho, const char *const *linhas, int n,
               int largura_min);
+void ui_caixa_centralizada(int estilo, int cor_borda, const char *titulo_borda,
+                           const char *cabecalho, const char *const *linhas, int n,
+                           int largura_min);
 void ui_caixa_titulo(const char *titulo);
 void ui_caixa_feedback(int tipo, const char *titulo, const char *fmt, ...);
 

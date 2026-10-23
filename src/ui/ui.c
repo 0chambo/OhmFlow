@@ -44,20 +44,24 @@ static FILE *saida(void)
 }
 
 static const char *const CODIGOS[UI_COR_TOTAL] = {
-    "\033[0m",    /* RESET    */
-    "\033[1m",    /* NEGRITO  */
-    "\033[2m",    /* DIM      */
-    "\033[31m",   /* VERMELHO */
-    "\033[32m",   /* VERDE    */
-    "\033[33m",   /* AMARELO  */
-    "\033[34m",   /* AZUL     */
-    "\033[35m",   /* MAGENTA  */
-    "\033[36m",   /* CIANO    */
-    "\033[37m",   /* BRANCO   */
-    "\033[36m",   /* BORDA    */
-    "\033[1;37m", /* TITULO   */
-    "\033[1;33m", /* DESTAQUE */
-    "\033[1;36m"  /* PROMPT   */
+    "\033[0m",       /* RESET       */
+    "\033[1m",       /* NEGRITO     */
+    "\033[2m",       /* DIM         */
+    "\033[31m",      /* VERMELHO    */
+    "\033[32m",      /* VERDE       */
+    "\033[33m",      /* AMARELO     */
+    "\033[34m",      /* AZUL        */
+    "\033[35m",      /* MAGENTA     */
+    "\033[36m",      /* CIANO       */
+    "\033[37m",      /* BRANCO      */
+    "\033[36m",      /* BORDA       */
+    "\033[1;37m",    /* TITULO      */
+    "\033[1;33m",    /* DESTAQUE    */
+    "\033[1;36m",    /* PROMPT      */
+    "\033[38;5;208m",/* LARANJA retro (Claude Code style) */
+    "\033[38;5;46m", /* VERDE NEON arcade                */
+    "\033[38;5;141m",/* ROXO/LILAS NEON                   */
+    "\033[38;5;130m" /* SOMBRA / PROFUNDIDADE (laranja queimado escuro) */
 };
 
 void ui_init(void)
@@ -105,6 +109,21 @@ void ui_limpar_tela(void)
         fputs("\033[2J\033[H", saida());
         fflush(saida());
     }
+}
+
+int ui_colunas_terminal(void)
+{
+    int colunas = 80;
+#ifdef _WIN32
+    if (saida_tty) {
+        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(h, &csbi)) {
+            colunas = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        }
+    }
+#endif
+    return colunas > 40 ? colunas : 40;
 }
 
 void ui_pausar(const char *msg)
@@ -161,8 +180,9 @@ typedef struct {
 } Moldura;
 
 #ifdef OHM_ASCII
-static const Moldura MOLD_DUPLA   = { "+", "+", "+", "+", "=", "|", "+", "+", "+", "+", "+" };
-static const Moldura MOLD_SIMPLES = { "+", "+", "+", "+", "-", "|", "+", "+", "+", "+", "+" };
+static const Moldura MOLD_DUPLA       = { "+", "+", "+", "+", "=", "|", "+", "+", "+", "+", "+" };
+static const Moldura MOLD_SIMPLES     = { "+", "+", "+", "+", "-", "|", "+", "+", "+", "+", "+" };
+static const Moldura MOLD_ARREDONDADA = { "+", "+", "+", "+", "-", "|", "+", "+", "+", "+", "+" };
 #else
 static const Moldura MOLD_DUPLA = {
     "\xE2\x95\x94", "\xE2\x95\x97", "\xE2\x95\x9A", "\xE2\x95\x9D", /* ╔ ╗ ╚ ╝ */
@@ -176,25 +196,34 @@ static const Moldura MOLD_SIMPLES = {
     "\xE2\x94\x9C", "\xE2\x94\xA4",                                 /* ├ ┤     */
     "\xE2\x94\xAC", "\xE2\x94\xB4", "\xE2\x94\xBC"                  /* ┬ ┴ ┼   */
 };
+static const Moldura MOLD_ARREDONDADA = {
+    "\xE2\x95\xAD", "\xE2\x95\xAE", "\xE2\x95\xB0", "\xE2\x95\xAF", /* ╭ ╮ ╰ ╯ */
+    "\xE2\x94\x80", "\xE2\x94\x82",                                 /* ─ │     */
+    "\xE2\x94\x9C", "\xE2\x94\xA4",                                 /* ├ ┤     */
+    "\xE2\x94\xAC", "\xE2\x94\xB4", "\xE2\x94\xBC"                  /* ┬ ┴ ┼   */
+};
 #endif
 
 static const Moldura *moldura(int estilo)
 {
-    return estilo == UI_MOLDURA_DUPLA ? &MOLD_DUPLA : &MOLD_SIMPLES;
+    if (estilo == UI_MOLDURA_DUPLA) return &MOLD_DUPLA;
+    if (estilo == UI_MOLDURA_ARREDONDADA) return &MOLD_ARREDONDADA;
+    return &MOLD_SIMPLES;
 }
 
-/* Linha "║ conteúdo···· ║" com largura interna `inner` */
-static void linha_caixa(FILE *out, const Moldura *m, const char *cb, const char *s, int inner)
+/* Linha "║ conteúdo···· ║" com largura interna `inner` e margem esquerda `margem` */
+static void linha_caixa(FILE *out, const Moldura *m, const char *cb, const char *s, int inner, int margem)
 {
     const char *rs = ui_cor(UI_COR_RESET);
+    repete(out, " ", margem);
     fprintf(out, "%s%s%s ", cb, m->v, rs);
     ui_pad(out, s, inner - 2, 0);
     fprintf(out, "%s %s%s%s\n", rs, cb, m->v, rs);
 }
 
-void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
-              const char *cabecalho, const char *const *linhas, int n,
-              int largura_min)
+static void ui_caixa_com_margem(int estilo, int cor_borda, const char *titulo_borda,
+                                const char *cabecalho, const char *const *linhas, int n,
+                                int largura_min, int margem)
 {
     FILE *out = saida();
     const Moldura *m = moldura(estilo);
@@ -207,6 +236,7 @@ void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
     if (titulo_borda && (w = (int)ui_largura(titulo_borda) + 4) > inner) inner = w;
 
     /* topo: ╔═ Título ═════╗ */
+    repete(out, " ", margem);
     fprintf(out, "%s%s", cb, m->tl);
     if (titulo_borda) {
         fprintf(out, "%s %s%s%s%s ", m->h, ui_cor(UI_COR_NEGRITO), titulo_borda, rs, cb);
@@ -221,22 +251,48 @@ void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
         int esq;
         w = (int)ui_largura(cabecalho);
         esq = (inner - w) / 2;
+        repete(out, " ", margem);
         fprintf(out, "%s%s%s", cb, m->v, rs);
         repete(out, " ", esq);
         fprintf(out, "%s%s%s", ui_cor(UI_COR_TITULO), cabecalho, rs);
         repete(out, " ", inner - w - esq);
         fprintf(out, "%s%s%s\n", cb, m->v, rs);
+        repete(out, " ", margem);
         fprintf(out, "%s%s", cb, m->ml);
         repete(out, m->h, inner);
         fprintf(out, "%s%s\n", m->mr, rs);
     }
 
-    for (i = 0; i < n; i++) linha_caixa(out, m, cb, linhas[i], inner);
+    for (i = 0; i < n; i++) linha_caixa(out, m, cb, linhas[i], inner, margem);
 
+    repete(out, " ", margem);
     fprintf(out, "%s%s", cb, m->bl);
     repete(out, m->h, inner);
     fprintf(out, "%s%s\n", m->br, rs);
     fflush(out);
+}
+
+void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
+              const char *cabecalho, const char *const *linhas, int n,
+              int largura_min)
+{
+    ui_caixa_com_margem(estilo, cor_borda, titulo_borda, cabecalho, linhas, n, largura_min, 0);
+}
+
+void ui_caixa_centralizada(int estilo, int cor_borda, const char *titulo_borda,
+                           const char *cabecalho, const char *const *linhas, int n,
+                           int largura_min)
+{
+    int cols = ui_colunas_terminal();
+    int inner = largura_min, w, i, margem;
+    for (i = 0; i < n; i++)
+        if ((w = (int)ui_largura(linhas[i]) + 2) > inner) inner = w;
+    if (cabecalho && (w = (int)ui_largura(cabecalho) + 2) > inner) inner = w;
+    if (titulo_borda && (w = (int)ui_largura(titulo_borda) + 4) > inner) inner = w;
+    
+    margem = (cols - (inner + 2)) / 2;
+    if (margem < 0) margem = 0;
+    ui_caixa_com_margem(estilo, cor_borda, titulo_borda, cabecalho, linhas, n, largura_min, margem);
 }
 
 void ui_caixa_titulo(const char *titulo)
