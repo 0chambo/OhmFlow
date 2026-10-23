@@ -124,20 +124,19 @@ static int cor_grandeza(int g)
 
 void tela_boas_vindas(void)
 {
-    static const char *const LOGO[5] = {
-        "  ___  _               _____ _               ",
-        " / _ \\| |__  _ __ ___ |  ___| | _____      __",
-        "| | | | '_ \\| '_ ` _ \\| |_  | |/ _ \\ \\ /\\ / /",
-        "| |_| | | | | | | | | |  _| | | (_) \\ V  V / ",
-        " \\___/|_| |_|_| |_| |_|_|   |_|\\___/ \\_/\\_/  ",
+    /* "big" figlet font — O mais largo, ~65 cols, contínuo */
+    static const char *const LOGO[6] = {
+        "  ____  _                 _____ _                    ",
+        " / __ \\| |__  _ __ ___   |  ___| | _____      __    ",
+        "| |  | | '_ \\| '_ ` _ \\  | |_  | |/ _ \\ \\ /\\ / /   ",
+        "| |__| | | | | | | | | | |  _| | | (_) \\ V  V /    ",
+        " \\____/|_| |_|_| |_| |_| |_|   |_|\\___/ \\_/\\_/     ",
+        "                                                      ",
     };
     static const char SUBTITULO[] = "Estoque de Resistores \xe2\x80\x94 Estrutura de Dados";
     static const char MSG[]       = "Sistema pronto. Pressione Enter para continuar";
 
-    /* Altura do conteúdo:
-     *   5 linhas logo + 4 linhas vazias entre elas = 9
-     *   + 1 blank + subtítulo + 2 blank + msg = 5
-     *   total = 14 linhas */
+    /* Altura do conteúdo: 6 logo + 1 blank + subtítulo + 2 blank + msg = 11 */
     int cols = ui_colunas_terminal();
     int rows = 24;
     int i, esq, topo;
@@ -158,17 +157,15 @@ void tela_boas_vindas(void)
     ui_limpar_tela();
 
     /* Padding vertical para centralizar */
-    topo = (rows - 14) / 2;
+    topo = (rows - 11) / 2;
     if (topo < 1) topo = 1;
     for (i = 0; i < topo; i++) putchar('\n');
 
-    /* Logo laranja, centralizado, linha em branco entre cada linha do art
-     * (efeito de texto maior sem mudar a fonte) */
-    esq = (cols - 49) / 2;
+    /* Logo laranja contínuo (sem quebras entre linhas) */
+    esq = (cols - 54) / 2;
     if (esq < 0) esq = 0;
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < 6; i++) {
         printf("%*s%s%s%s\n", esq, "", laranja, LOGO[i], rs);
-        if (i < 4) putchar('\n');
     }
     putchar('\n');
 
