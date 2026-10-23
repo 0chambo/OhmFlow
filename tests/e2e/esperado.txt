@@ -1,0 +1,42 @@
+Estoque de Resistores
+Resistor 4,7 kΩ inserido (10 un.)
+Resistor 220 Ω inserido (50 un.)
+Resistor 470 mΩ inserido (5 un.)
+Resistor 1 MΩ inserido (2 un.)
+
+Estoque atual
+470 mΩ
+220 Ω
+4,7 kΩ
+1 MΩ
+4 tipos · 67 peças
+
+4,7 kΩ já cadastrado
+
+Retirada concluída
+4,7 kΩ: 10 → 7 unidades
+
+4,7 kΩ → 7 unidades
+
+Estoque insuficiente
+4,7 kΩ tem 7, pedido 100
+
+Reposição concluída
+220 Ω: 50 → 60 unidades
+
+Valor inválido
+Valor inválido
+Valor inválido
+Operação cancelada
+
+Remover 1 MΩ (2 unidades) do estoque?
+1 MΩ removido
+
+Opção inválida
+
+Apagar TODOS os 3 tipos (72 peças)?
+Estoque reinicializado
+
+Estoque vazio
+Obrigado por usar o OhmFlow
+Estoque final: 0 tipos · 0 peças
