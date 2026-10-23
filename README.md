@@ -110,6 +110,30 @@ cppcheck --version
 
 > **Caminhos no MSYS2:** os discos do Windows aparecem como `/c/`, `/d/`... Por exemplo, `D:\GitHub` vira `/d/GitHub`. O terminal começa na sua pasta pessoal do MSYS2 (`~`).
 
+#### Usar pelo PowerShell, sem abrir o MSYS2
+
+Depois da instalação acima, o `gcc`, o `make` e o `git` também rodam direto no PowerShell. Basta o PowerShell enxergar duas pastas do MSYS2: `C:\msys64\ucrt64\bin` (gcc) e `C:\msys64\usr\bin` (make, git e utilitários que o `Makefile` usa).
+
+Só na janela atual (vale até fechar o PowerShell):
+
+```powershell
+$env:Path += ';C:\msys64\ucrt64\bin;C:\msys64\usr\bin'
+```
+
+Ou de forma permanente, para todo PowerShell novo (rode uma vez e abra outro PowerShell):
+
+```powershell
+$atual = [Environment]::GetEnvironmentVariable('Path', 'User')
+[Environment]::SetEnvironmentVariable('Path', "$atual;C:\msys64\ucrt64\bin;C:\msys64\usr\bin", 'User')
+```
+
+As pastas entram no **fim** do `Path`, assim os comandos do Windows com o mesmo nome (`find`, `sort`...) continuam valendo. Confira:
+
+```powershell
+gcc --version
+make --version
+```
+
 ### Linux
 
 Debian/Ubuntu:
@@ -134,36 +158,39 @@ brew install cppcheck      # opcional; requer o Homebrew (https://brew.sh)
 
 ## Baixar o projeto
 
-No terminal (no Windows, o **MSYS2 UCRT64**), vá até a pasta onde quer guardar o projeto e clone:
+No **PowerShell** (Windows, após a seção acima) ou em qualquer terminal Linux/macOS, vá até a pasta onde quer guardar o projeto e clone:
 
-```sh
-cd /d/GitHub        # exemplo no Windows (D:\GitHub); no Linux/macOS use qualquer pasta
+```powershell
+cd D:\GitHub        # exemplo no Windows; no Linux/macOS use qualquer pasta
 git clone https://github.com/Grolla05/OhmFlow.git
 cd OhmFlow
 ```
 
-Sem Git, também dá para baixar o ZIP no GitHub (**Code → Download ZIP**), extrair e abrir a pasta no terminal com `cd`.
+Sem Git, também dá para baixar o ZIP no GitHub (**Code → Download ZIP**), extrair e abrir a pasta no terminal com `cd`. Quem preferir o terminal **MSYS2 UCRT64** pode usá-lo: lá o caminho fica `/d/GitHub`.
 
 ## Compilar e executar
 
-Na pasta do projeto:
+O executável final sai na pasta **`dist/`**. Os arquivos intermediários e os testes ficam em `build/`. As duas pastas são ignoradas pelo Git.
 
-```sh
-make            # compila build/ohmflow (no Windows: build/ohmflow.exe)
-make run        # compila (se preciso) e executa
-make clean      # remove build/
+Na pasta do projeto, no **PowerShell** (Windows) ou no terminal (Linux/macOS):
+
+```powershell
+make            # compila dist/ohmflow (no Windows: dist\ohmflow.exe)
+make clean      # remove build/ e dist/
+```
+
+Para executar:
+
+```powershell
+.\dist\ohmflow.exe      # Windows (PowerShell, cmd ou Windows Terminal)
+./dist/ohmflow          # Linux/macOS
 ```
 
 ### Executando no Windows
 
-O terminal do MSYS2 (mintty) não é reconhecido como console interativo. Por isso, rodando por ele, cores, limpeza de tela e pausas ficam desligadas. Para a experiência completa, **compile no MSYS2 e execute no Windows Terminal, PowerShell ou cmd**:
+Rode o `dist\ohmflow.exe` pelo **Windows Terminal, PowerShell ou cmd**, como acima. O terminal do MSYS2 (mintty) não é reconhecido como console interativo: nele, cores, limpeza de tela e pausas ficam desligadas.
 
-```powershell
-cd D:\GitHub\OhmFlow
-.\build\ohmflow.exe
-```
-
-O `ohmflow.exe` depende só de DLLs do próprio Windows. Ele roda fora do MSYS2 e pode ser copiado para outro computador.
+O `ohmflow.exe` depende só de DLLs do próprio Windows. Ele roda fora do MSYS2, e a pasta `dist/` pode ser copiada para outro computador.
 
 ### Opções
 
@@ -174,15 +201,18 @@ O `ohmflow.exe` depende só de DLLs do próprio Windows. Ele roda fora do MSYS2 
 
 | Sintoma | Causa / solução |
 | --- | --- |
-| `gcc: command not found` | O terminal aberto não é o **MSYS2 UCRT64** (`echo $MSYSTEM`), ou o passo 4 não foi feito. |
-| `make: command not found` | Rode `pacman -S make` no UCRT64. |
+| `gcc` ou `make` não reconhecido no PowerShell | As pastas do MSYS2 não estão no `Path`. Rode o comando de [Usar pelo PowerShell](#usar-pelo-powershell-sem-abrir-o-msys2) e abra um PowerShell novo se foi a versão permanente. |
+| `gcc: command not found` no MSYS2 | O terminal aberto não é o **MSYS2 UCRT64** (`echo $MSYSTEM`), ou o passo 4 não foi feito. |
+| `make: command not found` no MSYS2 | Rode `pacman -S make` no UCRT64. |
 | `Ω` e bordas aparecem como `Î©` ou `â•”` | O terminal não está em UTF-8. Use o Windows Terminal ou compile com `-DOHM_ASCII`. |
 | Sem cores, sem limpar tela, sem pausas | O programa está rodando no mintty ou com entrada/saída redirecionada. Execute no Windows Terminal. |
 | `make asan` falha no Windows | É esperado: o gcc do MinGW não tem AddressSanitizer. Esse alvo roda no Linux e no CI. |
 
 ## Testes
 
-```sh
+Os mesmos comandos valem no PowerShell (Windows), no Linux e no macOS:
+
+```powershell
 make test       # testes unitários (lista, formatação, ui)
 make e2e        # roda o programa com tests/e2e/entrada.txt e confere tests/e2e/esperado.txt
 make asan       # testes + e2e com AddressSanitizer/UBSan (Linux; o gcc do MinGW não suporta)
@@ -191,8 +221,8 @@ make cppcheck   # análise estática
 
 Para validar tudo de uma vez:
 
-```sh
-make clean && make EXTRA_CFLAGS=-Werror all test e2e cppcheck
+```powershell
+make clean; make EXTRA_CFLAGS=-Werror all test e2e cppcheck
 ```
 
 O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda tudo isso, com `-Werror` e também o `make asan`, a cada push ou pull request em `main` e `Grolla`.

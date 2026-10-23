@@ -1,17 +1,18 @@
 # OhmFlow — build, testes e verificações
-#   make            compila build/ohmflow
+#   make            compila dist/ohmflow
 #   make run        executa o programa
 #   make test       testes unitários
 #   make e2e        teste ponta a ponta (menu alimentado por tests/e2e/entrada.txt)
 #   make asan       testes + e2e com AddressSanitizer/UBSan (Linux/CI)
 #   make cppcheck   análise estática
-#   make clean      remove build/
+#   make clean      remove build/ e dist/
 
 CC           = gcc
 CFLAGS       = -std=c99 -Wall -Wextra -pedantic -g -Isrc -Isrc/ui
 EXTRA_CFLAGS =
 LDLIBS       = -lm
 BUILD        = build
+DIST         = dist
 
 ifeq ($(OS),Windows_NT)
   EXE = .exe
@@ -22,7 +23,7 @@ endif
 SRC_LIB   = src/lista.c src/formatacao.c src/ui/ui.c src/ui/telas.c
 SRC_MAIN  = src/main.c
 HEADERS   = $(wildcard src/*.h src/ui/*.h)
-BIN       = $(BUILD)/ohmflow$(EXE)
+BIN       = $(DIST)/ohmflow$(EXE)
 TESTES    = test_lista test_formatacao test_ui
 TEST_BINS = $(addprefix $(BUILD)/,$(addsuffix $(EXE),$(TESTES)))
 
@@ -39,7 +40,8 @@ all: $(BIN)
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BIN): $(SRC_MAIN) $(SRC_LIB) $(HEADERS) | $(BUILD)
+$(BIN): $(SRC_MAIN) $(SRC_LIB) $(HEADERS)
+	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(SRC_MAIN) $(SRC_LIB) $(LDLIBS)
 
 $(BUILD)/test_%$(EXE): tests/test_%.c tests/test_framework.h $(SRC_LIB) $(HEADERS) | $(BUILD)
@@ -53,7 +55,7 @@ test: $(TEST_BINS)
 
 # Roda o binário real com a entrada roteirizada e confere, EM ORDEM, cada linha
 # de esperado.txt contra a saída (linhas vazias de esperado.txt são ignoradas).
-e2e: $(BIN)
+e2e: $(BIN) | $(BUILD)
 	@NO_COLOR=1 ./$(BIN) < $(E2E_ENTRADA) > $(E2E_SAIDA) 2>&1 || { echo "E2E FALHOU: programa saiu com erro"; exit 1; }
 	@awk 'NR==FNR { sub(/\r$$/, ""); if (length($$0)) esp[++n] = $$0; next } \
 	     { sub(/\r$$/, ""); if (i < n && index($$0, esp[i+1])) i++ } \
@@ -62,10 +64,10 @@ e2e: $(BIN)
 	           print "E2E OK (" n " verificacoes)" }' $(E2E_ESPERADO) $(E2E_SAIDA)
 
 asan:
-	$(MAKE) BUILD=$(BUILD)/asan EXTRA_CFLAGS="$(EXTRA_CFLAGS) $(ASAN_FLAGS)" test e2e
+	$(MAKE) BUILD=$(BUILD)/asan DIST=$(BUILD)/asan EXTRA_CFLAGS="$(EXTRA_CFLAGS) $(ASAN_FLAGS)" test e2e
 
 cppcheck:
 	cppcheck --enable=warning,style,performance --error-exitcode=1 --inline-suppr --quiet -Isrc -Isrc/ui src/
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD) $(DIST)
