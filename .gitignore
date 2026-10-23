@@ -1,0 +1,17 @@
+# Artefatos de build
+build/
+*.o
+*.exe
+*.out
+
+# Editores / SO
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Arquivos e pastas de Agentes
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/

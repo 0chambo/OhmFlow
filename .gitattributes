@@ -1,0 +1,3 @@
+# Fontes, Makefile e roteiros de teste sempre com LF (Makefile/sh quebram com CRLF)
+* text=auto eol=lf
+*.pdf binary

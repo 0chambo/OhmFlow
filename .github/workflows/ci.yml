@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, Grolla]
+  pull_request:
+    branches: [main, Grolla]
+
+jobs:
+  build-test:
+    name: Build, testes e análise
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Versões
+        run: |
+          gcc --version | head -1
+          make --version | head -1
+          cppcheck --version
+
+      - name: Build (warnings viram erro)
+        run: make EXTRA_CFLAGS=-Werror all
+
+      - name: Testes unitários
+        run: make EXTRA_CFLAGS=-Werror test
+
+      - name: Teste ponta a ponta (menu)
+        run: make e2e
+
+      - name: AddressSanitizer + UBSan
+        run: make asan
+
+      - name: Análise estática (cppcheck)
+        run: make cppcheck
+
+      - name: Saída do e2e (em caso de falha)
+        if: failure()
+        run: cat build/e2e_saida.txt build/asan/e2e_saida.txt 2>/dev/null || true
