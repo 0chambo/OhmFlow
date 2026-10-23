@@ -128,9 +128,3 @@ Use o template [Feature Request](ISSUE_TEMPLATE/feature_request.md) no GitHub Is
 
 Este projeto adota um ambiente colaborativo e respeitoso.  
 Seja construtivo nas revisões e receptivo ao feedback.
-
----
-
-## Dúvidas?
-
-Abra uma [Discussion](https://github.com/Grolla05/OhmFlow/discussions) ou mencione `@Grolla05` em uma issue.
