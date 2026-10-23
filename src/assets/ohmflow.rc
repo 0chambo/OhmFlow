@@ -1,0 +1,2 @@
+/* ohmflow.rc — recursos do executável Windows */
+1 ICON "src/assets/ohmflow.ico"

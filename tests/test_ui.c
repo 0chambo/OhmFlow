@@ -211,6 +211,66 @@ static void teste_tabela_alinhada(void)
     fclose(f);
 }
 
+static void teste_moldura_arredondada_alinhada(void)
+{
+    char buf[TAM_SAIDA];
+    const char *linhas[] = { "Linha 1", "Linha 2 teste" };
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Retro Box", "Header", linhas, 2, 30);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_TRUE(strstr(buf, "Retro Box") != NULL);
+    ASSERT_TRUE(strstr(buf, "Linha 2 teste") != NULL);
+    ASSERT_TRUE(linhas_mesma_largura(buf, NULL));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_cores_retro_novas(void)
+{
+    ui_definir_cor(1);
+    ASSERT_TRUE(strlen(ui_cor(UI_COR_LARANJA)) > 0);
+    ASSERT_TRUE(strlen(ui_cor(UI_COR_VERDE_NEON)) > 0);
+    ASSERT_TRUE(strlen(ui_cor(UI_COR_ROXO_NEON)) > 0);
+    ui_definir_cor(0);
+    ASSERT_STR_EQ("", ui_cor(UI_COR_LARANJA));
+    ASSERT_STR_EQ("", ui_cor(UI_COR_VERDE_NEON));
+    ASSERT_STR_EQ("", ui_cor(UI_COR_ROXO_NEON));
+}
+
+static void teste_largura_terminal(void)
+{
+    int cols = ui_colunas_terminal();
+    /* Deve devolver ao menos a largura padrão se não for terminal ou em ambiente de teste */
+    ASSERT_TRUE(cols >= 40);
+}
+
+static void teste_caixa_centralizada_alinhada(void)
+{
+    char buf[TAM_SAIDA];
+    const char *linhas[] = { "Opcao 1", "Opcao 2" };
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_caixa_centralizada(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Menu", "Header", linhas, 2, 40);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_TRUE(strstr(buf, "Menu") != NULL);
+    ASSERT_TRUE(linhas_mesma_largura(buf, NULL));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_cor_sombra_retro(void)
+{
+    ui_definir_cor(1);
+    ASSERT_TRUE(strlen(ui_cor(UI_COR_SOMBRA)) > 0);
+    ui_definir_cor(0);
+    ASSERT_STR_EQ("", ui_cor(UI_COR_SOMBRA));
+}
+
 int main(void)
 {
     ui_init();
@@ -225,5 +285,10 @@ int main(void)
     RUN_TEST(teste_caixa_cresce_com_conteudo);
     RUN_TEST(teste_feedback_alinhado);
     RUN_TEST(teste_tabela_alinhada);
+    RUN_TEST(teste_moldura_arredondada_alinhada);
+    RUN_TEST(teste_cores_retro_novas);
+    RUN_TEST(teste_largura_terminal);
+    RUN_TEST(teste_caixa_centralizada_alinhada);
+    RUN_TEST(teste_cor_sombra_retro);
     return tf_resumo("test_ui");
 }

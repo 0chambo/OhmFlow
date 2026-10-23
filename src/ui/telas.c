@@ -11,6 +11,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#  include <windows.h>
+#  include <conio.h>
+#else
+#  include <termios.h>
+#  include <unistd.h>
+#endif
 #include "telas.h"
 #include "ui.h"
 #include "formatacao.h"
@@ -47,7 +54,7 @@ static void feedback_cancelado(void)
 static void abre_tela(const char *titulo)
 {
     ui_limpar_tela();
-    ui_caixa_titulo(titulo);
+    ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, titulo, NULL, NULL, 0, UI_LARGURA);
 }
 
 /* Lê uma resistência; 0 se cancelado (vazio/EOF) ou após TENTATIVAS inválidas */
@@ -115,91 +122,276 @@ static int cor_grandeza(int g)
 
 /* ---- [1] boas-vindas -------------------------------------------------- */
 
-/* Escreve em dst o texto s (pode ter cor) centralizado em `largura` colunas */
-static void centraliza(char *dst, size_t n, const char *s, int largura)
-{
-    int esq = (largura - (int)ui_largura(s)) / 2;
-    snprintf(dst, n, "%*s%s", esq > 0 ? esq : 0, "", s);
-}
-
 void tela_boas_vindas(void)
 {
-    static const char *const TEXTOS[2] = {
-        "Estoque de Resistores - v1.0",
-        "Estrutura de Dados e Recuperação da Informação"
+    /* "big" figlet font — O mais largo, ~65 cols, contínuo */
+    static const char *const LOGO[6] = {
+        "  ____  _                 _____ _                    ",
+        " / __ \\| |__  _ __ ___   |  ___| | _____      __    ",
+        "| |  | | '_ \\| '_ ` _ \\  | |_  | |/ _ \\ \\ /\\ / /   ",
+        "| |__| | | | | | | | | | |  _| | | (_) \\ V  V /    ",
+        " \\____/|_| |_|_| |_| |_| |_|   |_|\\___/ \\_/\\_/     ",
+        "                                                      ",
     };
-    char arte[5][128], cor[128], textos[2][128];
-    const char *linhas[10];
-    static const char *const LOGO[5] = {
-        "  ___  _               _____ _               ",
-        " / _ \\| |__  _ __ ___ |  ___| | _____      __",
-        "| | | | '_ \\| '_ ` _ \\| |_  | |/ _ \\ \\ /\\ / /",
-        "| |_| | | | | | | | | |  _| | | (_) \\ V  V / ",
-        " \\___/|_| |_|_| |_| |_|_|   |_|\\___/ \\_/\\_/  "
-    };
-    int i, n = 0;
+    static const char SUBTITULO[] = "Estoque de Resistores \xe2\x80\x94 Estrutura de Dados";
+    static const char MSG[]       = "Sistema pronto. Pressione Enter para continuar";
+
+    /* Altura do conteúdo: 6 logo + 1 blank + subtítulo + 2 blank + msg = 11 */
+    int cols = ui_colunas_terminal();
+    int rows = 24;
+    int i, esq, topo;
+    const char *laranja = ui_cor(UI_COR_LARANJA);
+    const char *neon    = ui_cor(UI_COR_VERDE_NEON);
+    const char *dim     = ui_cor(UI_COR_DIM);
+    const char *rs      = ui_cor(UI_COR_RESET);
+
+#ifdef _WIN32
+    {
+        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(h, &csbi))
+            rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    }
+#endif
 
     ui_limpar_tela();
-    linhas[n++] = "";
-    for (i = 0; i < 5; i++) {
-        snprintf(cor, sizeof cor, "%s%s%s", ui_cor(UI_COR_PROMPT), LOGO[i],
-                 ui_cor(UI_COR_RESET));
-        centraliza(arte[i], sizeof arte[i], cor, LARG_BOAS_VINDAS);
-        linhas[n++] = arte[i];
+
+    /* Padding vertical para centralizar */
+    topo = (rows - 11) / 2;
+    // cppcheck-suppress knownConditionTrueFalse
+    if (topo < 1) topo = 1;
+    for (i = 0; i < topo; i++) putchar('\n');
+
+    /* Logo laranja contínuo (sem quebras entre linhas) */
+    esq = (cols - 54) / 2;
+    if (esq < 0) esq = 0;
+    for (i = 0; i < 6; i++) {
+        printf("%*s%s%s%s\n", esq, "", laranja, LOGO[i], rs);
     }
-    linhas[n++] = "";
-    for (i = 0; i < 2; i++) {
-        centraliza(textos[i], sizeof textos[i], TEXTOS[i], LARG_BOAS_VINDAS);
-        linhas[n++] = textos[i];
+    putchar('\n');
+
+    /* Subtítulo centralizado */
+    {
+        int t_esq = (cols - (int)ui_largura(SUBTITULO)) / 2;
+        if (t_esq < 0) t_esq = 0;
+        printf("%*s%s%s%s\n\n", t_esq, "", dim, SUBTITULO, rs);
     }
-    linhas[n++] = "";
-    ui_caixa(UI_MOLDURA_DUPLA, UI_COR_BORDA, NULL, NULL, linhas, n, LARG_BOAS_VINDAS + 2);
-    ui_pausar("Pressione Enter para começar...");
+
+    /* Mensagem estática centralizada */
+    {
+        int m_esq = (cols - (int)ui_largura(MSG) - 3) / 2;
+        if (m_esq < 0) m_esq = 0;
+        printf("%*s%s\xc2\xbb%s %s%s%s\n", m_esq, "", neon, rs, dim, MSG, rs);
+    }
+
+    /* Aguarda Enter sem imprimir texto extra */
+    if (ui_interativo()) {
+        char lixo[8];
+        fflush(stdout);
+        while (fgets(lixo, sizeof lixo, stdin) && !strchr(lixo, '\n')) ;
+    }
 }
 
 /* ---- [2] menu principal ----------------------------------------------- */
 
-static void desenha_menu(Lista *li)
+static int ler_tecla(void)
+{
+#ifdef _WIN32
+    int c = _getch();
+    if (c == 0 || c == 224) {
+        int c2 = _getch();
+        if (c2 == 72) return KEY_UP;
+        if (c2 == 80) return KEY_DOWN;
+        if (c2 == 75) return KEY_LEFT;
+        if (c2 == 77) return KEY_RIGHT;
+        return c2;
+    }
+    return c;
+#else
+    struct termios old_t, raw_t;
+    int c;
+    tcgetattr(STDIN_FILENO, &old_t);
+    raw_t = old_t;
+    raw_t.c_lflag &= ~((tcflag_t)(ICANON | ECHO));
+    raw_t.c_cc[VMIN] = 1;
+    raw_t.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSANOW, &raw_t);
+    c = getchar();
+    if (c == 27) {
+        int c2 = getchar();
+        if (c2 == '[') {
+            int c3 = getchar();
+            if      (c3 == 'A') c = KEY_UP;
+            else if (c3 == 'B') c = KEY_DOWN;
+            else if (c3 == 'C') c = KEY_RIGHT;
+            else if (c3 == 'D') c = KEY_LEFT;
+        }
+    }
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_t);
+    return c;
+#endif
+}
+
+int navegar_menu(int selecao, int tecla)
+{
+    int col, row;
+
+    /* Normaliza WASD */
+    if (tecla == 'w' || tecla == 'W') tecla = KEY_UP;
+    else if (tecla == 's' || tecla == 'S') tecla = KEY_DOWN;
+    else if (tecla == 'a' || tecla == 'A') tecla = KEY_LEFT;
+    else if (tecla == 'd' || tecla == 'D') tecla = KEY_RIGHT;
+
+    if (tecla != KEY_UP && tecla != KEY_DOWN &&
+        tecla != KEY_LEFT && tecla != KEY_RIGHT)
+        return selecao;
+
+    /* Converte seleção para (col, row) */
+    if (selecao == 0) {
+        row = 4;
+        col = 0; /* coluna padrão ao sair de Sair */
+    } else if (selecao >= 1 && selecao <= 4) {
+        col = 0;
+        row = selecao - 1;
+    } else { /* 5-8 */
+        col = 1;
+        row = selecao - 5;
+    }
+
+    switch (tecla) {
+    case KEY_UP:
+        if (row == 4) { row = 3; } /* de Sair vai para linha 3 */
+        else if (row == 0) { row = 4; } /* do topo vai para Sair */
+        else row--;
+        break;
+    case KEY_DOWN:
+        if (row == 4) { row = 0; } /* de Sair vai para linha 0 */
+        else if (row == 3) { row = 4; } /* da última linha vai para Sair */
+        else row++;
+        break;
+    case KEY_LEFT:
+        if (row < 4) col = 0;
+        break;
+    case KEY_RIGHT:
+        if (row < 4) col = 1;
+        break;
+    default:
+        break;
+    }
+
+    /* Converte de volta para seleção */
+    if (row == 4) return 0; /* Sair */
+    return col == 0 ? row + 1 : row + 5;
+}
+
+void desenha_menu(Lista *li, int selecao)
 {
     static const char *const ROTULOS[OPCAO_TOTAL] = {
         "Sair", "Inserir", "Remover", "Listar", "Consultar",
         "Retirar", "Repor", "Reinicializar", "(diferencial)"
     };
-    char linhas[5][160];
-    const char *ptrs[5];
-    const char *d = ui_cor(UI_COR_DESTAQUE), *rs = ui_cor(UI_COR_RESET);
-    int i;
+    char linhas[6][160];
+    const char *ptrs[6];
+    const char *neon  = ui_cor(UI_COR_VERDE_NEON);
+    const char *lrj   = ui_cor(UI_COR_LARANJA);
+    const char *bold  = ui_cor(UI_COR_NEGRITO);
+    const char *rs    = ui_cor(UI_COR_RESET);
+    const char *dim   = ui_cor(UI_COR_DIM);
+    const char *bullet = UI_BULLET;
+    int i, cols = ui_colunas_terminal();
 
     for (i = 0; i < 4; i++) {
-        snprintf(linhas[i], sizeof linhas[i], " %s[%d]%s %-13s %s[%d]%s %s",
-                 d, i + 1, rs, ROTULOS[i + 1], d, i + 5, rs, ROTULOS[i + 5]);
+        int esq_num = i + 1;
+        int dir_num = i + 5;
+        const char *ce = (selecao == esq_num) ? lrj  : neon;
+        const char *be = (selecao == esq_num) ? bold : "";
+        const char *cd = (selecao == dir_num) ? lrj  : neon;
+        const char *bd = (selecao == dir_num) ? bold : "";
+        snprintf(linhas[i], sizeof linhas[i],
+                 " %s%s%s%s %s[%d]%s %-11s  %s%s%s%s %s[%d]%s %s",
+                 be, ce, bullet, rs,
+                 ce, esq_num, rs, ROTULOS[esq_num],
+                 bd, cd, bullet, rs,
+                 cd, dir_num, rs, ROTULOS[dir_num]);
         ptrs[i] = linhas[i];
     }
-    snprintf(linhas[4], sizeof linhas[4], " %s[0]%s %s", d, rs, ROTULOS[OPCAO_SAIR]);
+    {
+        const char *cs = (selecao == 0) ? lrj : dim;
+        const char *bs = (selecao == 0) ? bold : "";
+        snprintf(linhas[4], sizeof linhas[4], " %s%s%s%s %s[0]%s %s",
+                 bs, cs, bullet, rs, cs, rs, ROTULOS[OPCAO_SAIR]);
+    }
     ptrs[4] = linhas[4];
 
-    ui_caixa(UI_MOLDURA_DUPLA, UI_COR_BORDA, NULL,
-             "OhmFlow - Estoque de Resistores", ptrs, 5, UI_LARGURA);
-    ui_dica("Tipos: %d %s Peças: %ld", tamanho_lista(li), UI_BARRA, total_pecas(li));
+    snprintf(linhas[5], sizeof linhas[5], " %sTipos:%s %-4d %s %sPeças:%s %ld",
+             ui_cor(UI_COR_ROXO_NEON), rs, tamanho_lista(li),
+             UI_BARRA,
+             ui_cor(UI_COR_ROXO_NEON), rs, total_pecas(li));
+    ptrs[5] = linhas[5];
+
+    ui_caixa_centralizada(UI_MOLDURA_ARREDONDADA, UI_COR_LARANJA, " OhmFlow System ",
+                          "Controle de Estoque 8-Bit", ptrs, 6, UI_LARGURA);
+
+    /* Linha de dica centralizada */
+    {
+        const char *dica =
+            "\xe2\x86\x91\xe2\x86\x93\xe2\x86\x90\xe2\x86\x92"
+            "/WASD Navegar  \xc2\xb7  [0-8] Acesso r\xc3\xa1pido  \xc2\xb7  [Enter] Confirmar";
+        int esq = (cols - (int)ui_largura(dica)) / 2;
+        if (esq < 0) esq = 0;
+        printf("%*s%s%s%s\n", esq, "", dim, dica, rs);
+    }
 }
+
+/* Linhas que o bloco do menu ocupa na tela (caixa + dica) */
+#define MENU_LINHAS 11
 
 int tela_menu(Lista *li)
 {
-    char buf[TAM_ENTRADA], erro[TAM_ENTRADA + 64];
-    char *fim;
+    int selecao = 1;
 
-    erro[0] = '\0';
+    /* Modo não interativo: fluxo de texto (e2e, CI, testes) */
+    if (!ui_interativo()) {
+        char buf[TAM_ENTRADA], erro[TAM_ENTRADA + 64];
+        char *fim;
+        erro[0] = '\0';
+        for (;;) {
+            long op;
+            ui_limpar_tela();
+            putchar('\n');
+            desenha_menu(li, selecao);
+            if (erro[0]) ui_mensagem(UI_ERRO, "%s", erro);
+            if (!ui_ler_linha("Op\xc3\xa7\xc3\xa3o: ", buf, sizeof buf)) return OPCAO_SAIR;
+            op = strtol(buf, &fim, 10);
+            if (buf[0] != '\0' && *fim == '\0' && op >= 0 && op < OPCAO_TOTAL)
+                return (int)op;
+            snprintf(erro, sizeof erro,
+                     "Op\xc3\xa7\xc3\xa3o inv\xc3\xa1lida \"%s\". Escolha de 0 a %d.",
+                     buf, OPCAO_TOTAL - 1);
+        }
+    }
+
+    /* Modo interativo: navegação por teclado */
+    ui_cursor(0); /* esconde cursor piscante durante navegação */
     for (;;) {
-        long op;
+        int c, pad, i;
         ui_limpar_tela();
-        putchar('\n');
-        desenha_menu(li);
-        if (erro[0]) ui_mensagem(UI_ERRO, "%s", erro);
-        if (!ui_ler_linha("Opção: ", buf, sizeof buf)) return OPCAO_SAIR;
-        op = strtol(buf, &fim, 10);
-        if (buf[0] != '\0' && *fim == '\0' && op >= 0 && op < OPCAO_TOTAL) return (int)op;
-        snprintf(erro, sizeof erro, "Opção inválida \"%s\". Escolha de 0 a %d.",
-                 buf, OPCAO_TOTAL - 1);
+
+        /* Centralização vertical: pad linhas em branco acima do menu */
+        pad = (ui_linhas_terminal() - MENU_LINHAS) / 2;
+        for (i = 0; i < pad; i++) putchar('\n');
+
+        desenha_menu(li, selecao);
+
+        c = ler_tecla();
+
+        /* Acesso rápido por dígito */
+        if (c >= '0' && c <= '8') { ui_cursor(1); return c - '0'; }
+
+        /* Enter confirma seleção atual */
+        if (c == '\r' || c == '\n') { ui_cursor(1); return selecao; }
+
+        selecao = navegar_menu(selecao, c);
     }
 }
 

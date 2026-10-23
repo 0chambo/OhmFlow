@@ -15,16 +15,22 @@ BUILD        = build
 DIST         = dist
 
 ifeq ($(OS),Windows_NT)
-  EXE = .exe
+  EXE     = .exe
+  WINDRES = windres
+  ICO     = src/assets/ohmflow.ico
+  RES_OBJ = $(BUILD)/ohmflow_res.o
 else
-  EXE =
+  EXE     =
+  WINDRES =
+  ICO     =
+  RES_OBJ =
 endif
 
 SRC_LIB   = src/lista.c src/formatacao.c src/ui/ui.c src/ui/telas.c
 SRC_MAIN  = src/main.c
 HEADERS   = $(wildcard src/*.h src/ui/*.h)
 BIN       = $(DIST)/ohmflow$(EXE)
-TESTES    = test_lista test_formatacao test_ui
+TESTES    = test_lista test_formatacao test_ui test_telas
 TEST_BINS = $(addprefix $(BUILD)/,$(addsuffix $(EXE),$(TESTES)))
 
 E2E_ENTRADA  = tests/e2e/entrada.txt
@@ -40,9 +46,15 @@ all: $(BIN)
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BIN): $(SRC_MAIN) $(SRC_LIB) $(HEADERS)
+$(ICO): src/assets/logo.png
+	python -c "from PIL import Image; img=Image.open('$<').convert('RGBA'); img.save('$@', format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+
+$(RES_OBJ): src/assets/ohmflow.rc $(ICO) | $(BUILD)
+	$(WINDRES) $< -o $@
+
+$(BIN): $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(HEADERS)
 	mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(SRC_MAIN) $(SRC_LIB) $(LDLIBS)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(LDLIBS)
 
 $(BUILD)/test_%$(EXE): tests/test_%.c tests/test_framework.h $(SRC_LIB) $(HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Itests -o $@ $< $(SRC_LIB) $(LDLIBS)
