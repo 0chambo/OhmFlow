@@ -19,11 +19,13 @@ ifeq ($(OS),Windows_NT)
   WINDRES = windres
   ICO     = src/assets/ohmflow.ico
   RES_OBJ = $(BUILD)/ohmflow_res.o
+  LDFLAGS_APP = -mwindows
 else
   EXE     =
   WINDRES =
   ICO     =
   RES_OBJ =
+  LDFLAGS_APP =
 endif
 
 SRC_LIB   = src/lista.c src/formatacao.c src/ui/ui.c src/ui/telas.c
@@ -54,7 +56,7 @@ $(RES_OBJ): src/assets/ohmflow.rc $(ICO) | $(BUILD)
 
 $(BIN): $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(HEADERS)
 	mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(LDLIBS)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(LDLIBS) $(LDFLAGS_APP)
 
 $(BUILD)/test_%$(EXE): tests/test_%.c tests/test_framework.h $(SRC_LIB) $(HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Itests -o $@ $< $(SRC_LIB) $(LDLIBS)

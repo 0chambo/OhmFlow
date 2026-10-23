@@ -119,6 +119,18 @@ const char *ui_cor(int cor)
 void ui_limpar_tela(void)
 {
     if (ui_interativo() && vt_ok) {
+#ifdef _WIN32
+        /* Preenche o buffer inteiro: nada de tela anterior para reaparecer */
+        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(h, &csbi)) {
+            COORD origem = { 0, 0 };
+            DWORD n = (DWORD)csbi.dwSize.X * (DWORD)csbi.dwSize.Y, escritos;
+            FillConsoleOutputCharacterA(h, ' ', n, origem, &escritos);
+            FillConsoleOutputAttribute(h, csbi.wAttributes, n, origem, &escritos);
+            SetConsoleCursorPosition(h, origem);
+        }
+#endif
         fputs("\033[3J\033[2J\033[H", saida());
         fflush(saida());
     }
