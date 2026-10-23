@@ -1,0 +1,57 @@
+name: "✨ Tarefa / Funcionalidade"
+description: Nova funcionalidade, melhoria ou tarefa técnica
+title: "[Tarefa] "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: modulo
+    attributes:
+      label: Módulo
+      options:
+        - "lista (src/lista.*)"
+        - "formatacao (src/formatacao.*)"
+        - "ui (src/ui/ui.*)"
+        - "telas (src/ui/telas.*)"
+        - "main (src/main.c)"
+        - "tests/"
+        - "build / Makefile"
+        - "CI / GitHub Actions"
+        - "Documentação"
+    validations:
+      required: true
+
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo
+      description: O que precisa existir e por que isso é útil para o projeto?
+    validations:
+      required: true
+
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Critérios de pronto
+      placeholder: |
+        - [ ] `make test` passa sem falhas
+        - [ ] `make e2e` passa sem falhas
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: prioridade
+    attributes:
+      label: Prioridade
+      options:
+        - Baixa
+        - Média
+        - Alta
+    validations:
+      required: true
+
+  - type: textarea
+    id: notas
+    attributes:
+      label: Notas e dependências
+      description: Links, decisões já tomadas, outras issues relacionadas.
