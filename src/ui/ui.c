@@ -82,6 +82,18 @@ void ui_init(void)
             && SetConsoleMode(h, modo | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
             vt_ok = 1;
     }
+    SetConsoleTitleA("OhmFlow");
+    {
+        HWND hwnd = GetConsoleWindow();
+        if (hwnd) {
+            HICON icon = LoadIconA(GetModuleHandleA(NULL),
+                                   MAKEINTRESOURCEA(1));
+            if (icon) {
+                SendMessageA(hwnd, WM_SETICON, ICON_BIG,   (LPARAM)icon);
+                SendMessageA(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)icon);
+            }
+        }
+    }
 #else
     {   /* terminais "dumb" não interpretam sequências ANSI */
         const char *term = getenv("TERM");
@@ -107,7 +119,7 @@ const char *ui_cor(int cor)
 void ui_limpar_tela(void)
 {
     if (ui_interativo() && vt_ok) {
-        fputs("\033[2J\033[H", saida());
+        fputs("\033[3J\033[2J\033[H", saida());
         fflush(saida());
     }
 }
