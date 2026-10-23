@@ -1,0 +1,37 @@
+# CODEOWNERS — OhmFlow
+#
+# Cada linha define quem é responsável por revisar mudanças nos caminhos listados.
+# Regras posteriores sobrepõem as anteriores para o mesmo caminho.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Autores do projeto:
+#   Felipe Grolla Freitas       → @Grolla05
+#   Guilherme Oliveira Nogueira → @Nogzzin
+#   Giovanna Lima Salvagnini    → @TODO_giovanna    (substitua pelo handle GitHub real)
+#   Henrique Spadaccia Chambó   → @0chambo
+
+# Dono padrão: qualquer arquivo não coberto pelas regras abaixo
+*                           @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+
+# Núcleo da estrutura de dados
+src/lista.*                 @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+
+# Módulo de formatação e parse
+src/formatacao.*            @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+
+# Interface de usuário
+src/ui/                     @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+
+# Ponto de entrada
+src/main.c                  @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+
+# Suíte de testes
+tests/                      @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+
+# CI/CD e build
+.github/                    @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+Makefile                    @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+
+# Documentação e referências
+README.md                   @Grolla05 @Nogzzin @TODO_giovanna @0chambo
+refs/                       @Grolla05 @Nogzzin @TODO_giovanna @0chambo

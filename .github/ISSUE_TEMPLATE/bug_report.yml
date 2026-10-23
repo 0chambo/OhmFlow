@@ -1,0 +1,85 @@
+name: "🐛 Relato de bug"
+description: Algo no programa não está funcionando como esperado
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Não cole senhas, tokens nem dados pessoais.** Use dados fictícios ou mascare as informações.
+
+  - type: dropdown
+    id: modulo
+    attributes:
+      label: Módulo afetado
+      options:
+        - "lista (src/lista.*)"
+        - "formatacao (src/formatacao.*)"
+        - "ui (src/ui/ui.*)"
+        - "telas (src/ui/telas.*)"
+        - "main (src/main.c)"
+        - "build / Makefile"
+        - "CI / GitHub Actions"
+        - "Outro"
+    validations:
+      required: true
+
+  - type: textarea
+    id: descricao
+    attributes:
+      label: O que aconteceu
+      description: Descreva o problema com clareza.
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que era esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduzir
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. Compilar com `make all`
+        2. Executar `./dist/ohmflow`
+        3. Escolher a opção X
+        4. Digitar Y
+        5. Ver o erro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severidade
+    attributes:
+      label: Gravidade
+      options:
+        - "Baixa (incômodo visual ou mensagem errada)"
+        - "Média (resultado incorreto, mas o programa continua)"
+        - "Alta (crash, travamento ou dado perdido)"
+        - "Crítica (corrupção de memória / undefined behavior)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: ambiente
+    attributes:
+      label: Ambiente
+      description: "SO, terminal, versão do compilador (`gcc --version`), branch/commit (`git log --oneline -1`)."
+      placeholder: |
+        OS: Windows 11 / Ubuntu 24.04 / macOS 15
+        Terminal: Windows Terminal / MSYS2 UCRT64 / bash
+        gcc: gcc (GCC) 14.2.0
+        commit: abc1234 feat(lista): ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Saída do terminal / logs
+      description: Remova qualquer dado sensível antes de colar.
+      render: shell
