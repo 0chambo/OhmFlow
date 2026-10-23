@@ -345,6 +345,9 @@ void desenha_menu(Lista *li, int selecao)
     }
 }
 
+/* Linhas que o bloco do menu ocupa na tela (caixa + dica) */
+#define MENU_LINHAS 11
+
 int tela_menu(Lista *li)
 {
     int selecao = 1;
@@ -371,19 +374,24 @@ int tela_menu(Lista *li)
     }
 
     /* Modo interativo: navegação por teclado */
+    ui_cursor(0); /* esconde cursor piscante durante navegação */
     for (;;) {
-        int c;
+        int c, pad, i;
         ui_limpar_tela();
-        putchar('\n');
+
+        /* Centralização vertical: pad linhas em branco acima do menu */
+        pad = (ui_linhas_terminal() - MENU_LINHAS) / 2;
+        for (i = 0; i < pad; i++) putchar('\n');
+
         desenha_menu(li, selecao);
 
         c = ler_tecla();
 
         /* Acesso rápido por dígito */
-        if (c >= '0' && c <= '8') return c - '0';
+        if (c >= '0' && c <= '8') { ui_cursor(1); return c - '0'; }
 
         /* Enter confirma seleção atual */
-        if (c == '\r' || c == '\n') return selecao;
+        if (c == '\r' || c == '\n') { ui_cursor(1); return selecao; }
 
         selecao = navegar_menu(selecao, c);
     }

@@ -70,6 +70,8 @@ const char *ui_cor(int cor);
 void ui_limpar_tela(void);
 void ui_pausar(const char *msg);
 int  ui_colunas_terminal(void);
+int  ui_linhas_terminal(void);
+void ui_cursor(int visivel); /* 1 = mostra, 0 = esconde */
 
 /* Caixas */
 void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,

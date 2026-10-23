@@ -23,6 +23,7 @@
 #endif
 #else
 #include <unistd.h>
+#include <sys/ioctl.h>
 #define UI_ISATTY isatty
 #define UI_FILENO fileno
 #endif
@@ -124,6 +125,34 @@ int ui_colunas_terminal(void)
     }
 #endif
     return colunas > 40 ? colunas : 40;
+}
+
+int ui_linhas_terminal(void)
+{
+    int linhas = 24;
+#ifdef _WIN32
+    if (saida_tty) {
+        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(h, &csbi))
+            linhas = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    }
+#else
+    if (saida_tty) {
+        struct winsize ws;
+        if (ioctl(UI_FILENO(saida()), TIOCGWINSZ, &ws) == 0 && ws.ws_row > 0)
+            linhas = (int)ws.ws_row;
+    }
+#endif
+    return linhas > 10 ? linhas : 10;
+}
+
+void ui_cursor(int visivel)
+{
+    if (ui_interativo() && vt_ok) {
+        fputs(visivel ? "\033[?25h" : "\033[?25l", saida());
+        fflush(saida());
+    }
 }
 
 void ui_pausar(const char *msg)
