@@ -1,5 +1,6 @@
 # Artefatos de build
 build/
+dist/
 *.o
 *.exe
 *.out
