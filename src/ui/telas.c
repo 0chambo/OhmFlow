@@ -158,6 +158,7 @@ void tela_boas_vindas(void)
 
     /* Padding vertical para centralizar */
     topo = (rows - 11) / 2;
+    /* cppcheck-suppress knownConditionTrueFalse — rows muda em _WIN32 */
     if (topo < 1) topo = 1;
     for (i = 0; i < topo; i++) putchar('\n');
 
@@ -297,7 +298,7 @@ void desenha_menu(Lista *li, int selecao)
     const char *rs    = ui_cor(UI_COR_RESET);
     const char *dim   = ui_cor(UI_COR_DIM);
     const char *bullet = UI_BULLET;
-    int i, cols = ui_colunas_terminal(), esq;
+    int i, cols = ui_colunas_terminal();
 
     for (i = 0; i < 4; i++) {
         int esq_num = i + 1;
@@ -336,7 +337,7 @@ void desenha_menu(Lista *li, int selecao)
         const char *dica =
             "\xe2\x86\x91\xe2\x86\x93\xe2\x86\x90\xe2\x86\x92"
             "/WASD Navegar  \xc2\xb7  [0-8] Acesso r\xc3\xa1pido  \xc2\xb7  [Enter] Confirmar";
-        esq = (cols - (int)ui_largura(dica)) / 2;
+        int esq = (cols - (int)ui_largura(dica)) / 2;
         if (esq < 0) esq = 0;
         printf("%*s%s%s%s\n", esq, "", dim, dica, rs);
     }
