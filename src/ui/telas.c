@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
-#  include <windows.h>
 #  include <conio.h>
 #else
 #  include <termios.h>
@@ -136,27 +135,17 @@ void tela_boas_vindas(void)
 
     /* Altura do conteúdo: 6 logo + 1 blank + subtítulo + 2 blank + msg = 11 */
     int cols = ui_colunas_terminal();
-    int rows = 24;
+    int rows = ui_linhas_terminal();
     int i, esq, topo;
     const char *laranja = ui_cor(UI_COR_LARANJA);
     const char *neon    = ui_cor(UI_COR_VERDE_NEON);
     const char *dim     = ui_cor(UI_COR_DIM);
     const char *rs      = ui_cor(UI_COR_RESET);
 
-#ifdef _WIN32
-    {
-        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-        CONSOLE_SCREEN_BUFFER_INFO csbi;
-        if (GetConsoleScreenBufferInfo(h, &csbi))
-            rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-    }
-#endif
-
     ui_limpar_tela();
 
     /* Padding vertical para centralizar */
     topo = (rows - 11) / 2;
-    // cppcheck-suppress knownConditionTrueFalse
     if (topo < 1) topo = 1;
     for (i = 0; i < topo; i++) putchar('\n');
 
@@ -679,7 +668,8 @@ void tela_repor(Lista *li)
     res = repor_estoque(li, ohms, qtd);
     if (res == LISTA_OK)
         ui_caixa_feedback(UI_SUCESSO, "Reposição concluída",
-                          "%s: %d %s %d unidades", txt, atual, UI_SETA, atual + qtd);
+                          "%s: %d %s %d %s", txt, atual, UI_SETA, atual + qtd,
+                          plural(atual + qtd, "unidade", "unidades"));
     else
         ui_caixa_feedback(UI_ERRO, "Quantidade inválida",
                           "O total excederia o limite de %d unidades", INT_MAX);
