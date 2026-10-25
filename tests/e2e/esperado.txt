@@ -34,7 +34,13 @@ Remover 1 MΩ (2 unidades) do estoque?
 
 Opção inválida
 
-Apagar TODOS os 3 tipos (72 peças)?
+Retirada concluída - estoque zerado
+470 mΩ: 5 → 0 unidades
+
+Reposição concluída
+470 mΩ: 0 → 1 unidade 
+
+Apagar TODOS os 3 tipos (68 peças)?
 Estoque reinicializado
 
 Estoque vazio

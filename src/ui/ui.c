@@ -134,39 +134,41 @@ void ui_limpar_tela(void)
     }
 }
 
-int ui_colunas_terminal(void)
+/* Tamanho visível do terminal; devolve 0 (sem tocar em cols/rows) se não for
+ * terminal ou não der para medir */
+static int tamanho_console(int *cols, int *rows)
 {
-    int colunas = 80;
+    if (!saida_tty) return 0;
 #ifdef _WIN32
-    if (saida_tty) {
-        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    {
         CONSOLE_SCREEN_BUFFER_INFO csbi;
-        if (GetConsoleScreenBufferInfo(h, &csbi)) {
-            colunas = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-        }
+        if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi)) return 0;
+        *cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        *rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    }
+#else
+    {
+        struct winsize ws;
+        if (ioctl(UI_FILENO(saida()), TIOCGWINSZ, &ws) != 0
+            || ws.ws_col == 0 || ws.ws_row == 0) return 0;
+        *cols = (int)ws.ws_col;
+        *rows = (int)ws.ws_row;
     }
 #endif
-    // cppcheck-suppress knownConditionTrueFalse
+    return 1;
+}
+
+int ui_colunas_terminal(void)
+{
+    int colunas = 80, linhas = 24;
+    tamanho_console(&colunas, &linhas);
     return colunas > 40 ? colunas : 40;
 }
 
 int ui_linhas_terminal(void)
 {
-    int linhas = 24;
-#ifdef _WIN32
-    if (saida_tty) {
-        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-        CONSOLE_SCREEN_BUFFER_INFO csbi;
-        if (GetConsoleScreenBufferInfo(h, &csbi))
-            linhas = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-    }
-#else
-    if (saida_tty) {
-        struct winsize ws;
-        if (ioctl(UI_FILENO(saida()), TIOCGWINSZ, &ws) == 0 && ws.ws_row > 0)
-            linhas = (int)ws.ws_row;
-    }
-#endif
+    int colunas = 80, linhas = 24;
+    tamanho_console(&colunas, &linhas);
     return linhas > 10 ? linhas : 10;
 }
 
