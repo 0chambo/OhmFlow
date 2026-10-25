@@ -35,7 +35,7 @@ void   libera_lista(Lista *li);
 int    reinicializa_lista(Lista *li);
 
 int    tamanho_lista(Lista *li);
-long   total_pecas(Lista *li);
+long long total_pecas(Lista *li); /* long long: long tem 32 bits no Windows */
 int    lista_vazia(Lista *li);
 
 int    insere_lista_ordenada(Lista *li, Resistor r);

@@ -252,6 +252,18 @@ static void teste_repor_overflow(void)
     libera_lista(li);
 }
 
+/* Soma de quantidades grandes não pode estourar (long tem 32 bits no Windows) */
+static void teste_total_pecas_sem_overflow(void)
+{
+    Lista *li = cria_lista();
+    insere_lista_ordenada(li, R(1000, INT_MAX));
+    insere_lista_ordenada(li, R(2000, 1));
+    ASSERT_EQ_INT((long long)INT_MAX + 1, total_pecas(li));
+    insere_lista_ordenada(li, R(3000, INT_MAX));
+    ASSERT_EQ_INT(2LL * INT_MAX + 1, total_pecas(li));
+    libera_lista(li);
+}
+
 /* ---- reinicializar ------------------------------------------------- */
 
 static void teste_reinicializa(void)
@@ -317,6 +329,7 @@ int main(void)
     RUN_TEST(teste_retira_invalido);
     RUN_TEST(teste_repor);
     RUN_TEST(teste_repor_overflow);
+    RUN_TEST(teste_total_pecas_sem_overflow);
     RUN_TEST(teste_reinicializa);
     RUN_TEST(teste_lista_nula);
     RUN_TEST(teste_mesma_resistencia);

@@ -35,7 +35,7 @@ static const int TAB_DIR[]  = { 1, 0, 1 };
 
 /* ---- auxiliares ------------------------------------------------------- */
 
-static const char *plural(long n, const char *singular, const char *plur)
+static const char *plural(long long n, const char *singular, const char *plur)
 {
     return n == 1 ? singular : plur;
 }
@@ -323,7 +323,7 @@ void desenha_menu(Lista *li, int selecao)
     }
     ptrs[4] = linhas[4];
 
-    snprintf(linhas[5], sizeof linhas[5], " %sTipos:%s %-4d %s %sPeças:%s %ld",
+    snprintf(linhas[5], sizeof linhas[5], " %sTipos:%s %-4d %s %sPeças:%s %lld",
              ui_cor(UI_COR_ROXO_NEON), rs, tamanho_lista(li),
              UI_BARRA,
              ui_cor(UI_COR_ROXO_NEON), rs, total_pecas(li));
@@ -491,7 +491,7 @@ void tela_listar(Lista *li)
     const char *cabecalho[3];
     const char *ng = ui_cor(UI_COR_NEGRITO), *rs = ui_cor(UI_COR_RESET);
     int indice = 0, tipos = tamanho_lista(li);
-    long pecas = total_pecas(li);
+    long long pecas = total_pecas(li);
 
     abre_tela("Estoque atual");
     if (lista_vazia(li)) {
@@ -511,7 +511,7 @@ void tela_listar(Lista *li)
     ui_tabela_borda(UI_TAB_MEIO, TAB_LARG, 3);
     percorre_lista(li, linha_estoque, &indice);
     ui_tabela_borda(UI_TAB_BASE, TAB_LARG, 3);
-    ui_dica("%d %s %s %ld %s", tipos, plural(tipos, "tipo", "tipos"), UI_PONTO,
+    ui_dica("%d %s %s %lld %s", tipos, plural(tipos, "tipo", "tipos"), UI_PONTO,
             pecas, plural(pecas, "peça", "peças"));
     voltar_ao_menu();
 }
@@ -613,7 +613,7 @@ void tela_repor(Lista *li)
 void tela_reinicializar(Lista *li)
 {
     int tipos = tamanho_lista(li);
-    long pecas = total_pecas(li);
+    long long pecas = total_pecas(li);
 
     abre_tela("Inicializar / reinicializar");
     putchar('\n');
@@ -623,13 +623,13 @@ void tela_reinicializar(Lista *li)
         voltar_ao_menu();
         return;
     }
-    if (!ui_confirmar("Apagar TODOS os %d %s (%ld %s)?", tipos, plural(tipos, "tipo", "tipos"),
+    if (!ui_confirmar("Apagar TODOS os %d %s (%lld %s)?", tipos, plural(tipos, "tipo", "tipos"),
                       pecas, plural(pecas, "peça", "peças"))) {
         feedback_cancelado();
         return;
     }
     reinicializa_lista(li);
-    ui_caixa_feedback(UI_SUCESSO, "Estoque reinicializado", "%d %s removidos (%ld %s)", tipos,
+    ui_caixa_feedback(UI_SUCESSO, "Estoque reinicializado", "%d %s removidos (%lld %s)", tipos,
                       plural(tipos, "tipo", "tipos"), pecas,
                       plural(pecas, "peça", "peças"));
     voltar_ao_menu();
@@ -651,9 +651,9 @@ void tela_encerramento(Lista *li)
     char resumo[96];
     const char *linhas[2];
     int tipos = tamanho_lista(li);
-    long pecas = total_pecas(li);
+    long long pecas = total_pecas(li);
 
-    snprintf(resumo, sizeof resumo, "Estoque final: %d %s %s %ld %s", tipos,
+    snprintf(resumo, sizeof resumo, "Estoque final: %d %s %s %lld %s", tipos,
              plural(tipos, "tipo", "tipos"), UI_PONTO, pecas,
              plural(pecas, "peça", "peças"));
     linhas[0] = "Obrigado por usar o OhmFlow!";
