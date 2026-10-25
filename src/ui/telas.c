@@ -29,9 +29,6 @@
 
 /* Larguras das colunas da tabela de estoque: #, Resistência, Quantidade */
 static const int TAB_LARG[] = { 2, 12, 10 };
-
-/* Largura do conteúdo da caixa de boas-vindas (logo tem 45 colunas) */
-#define LARG_BOAS_VINDAS 50
 static const int TAB_DIR[]  = { 1, 0, 1 };
 
 /* ---- auxiliares ------------------------------------------------------- */

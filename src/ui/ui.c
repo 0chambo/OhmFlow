@@ -57,12 +57,10 @@ static const char *const CODIGOS[UI_COR_TOTAL] = {
     "\033[37m",      /* BRANCO      */
     "\033[36m",      /* BORDA       */
     "\033[1;37m",    /* TITULO      */
-    "\033[1;33m",    /* DESTAQUE    */
     "\033[1;36m",    /* PROMPT      */
     "\033[38;5;208m",/* LARANJA retro (Claude Code style) */
     "\033[38;5;46m", /* VERDE NEON arcade                */
-    "\033[38;5;141m",/* ROXO/LILAS NEON                   */
-    "\033[38;5;130m" /* SOMBRA / PROFUNDIDADE (laranja queimado escuro) */
+    "\033[38;5;141m" /* ROXO/LILAS NEON                   */
 };
 
 void ui_init(void)
@@ -347,11 +345,6 @@ void ui_caixa_centralizada(int estilo, int cor_borda, const char *titulo_borda,
     margem = (cols - (inner + 2)) / 2;
     if (margem < 0) margem = 0;
     ui_caixa_com_margem(estilo, cor_borda, titulo_borda, cabecalho, linhas, n, largura_min, margem);
-}
-
-void ui_caixa_titulo(const char *titulo)
-{
-    ui_caixa(UI_MOLDURA_DUPLA, UI_COR_BORDA, titulo, NULL, NULL, 0, UI_LARGURA);
 }
 
 static int cor_do_tipo(int tipo)

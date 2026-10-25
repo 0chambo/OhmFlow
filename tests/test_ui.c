@@ -100,7 +100,6 @@ static void teste_sem_cor_nao_emite_ansi(void)
     ASSERT_STR_EQ("", ui_cor(UI_COR_VERDE));
     ui_caixa_feedback(UI_SUCESSO, "Tudo certo", "linha %d", 2);
     ui_mensagem(UI_ERRO, "falhou %s", "aqui");
-    ui_caixa_titulo("Titulo");
     ASSERT_TRUE(strchr(conteudo(f, buf, sizeof buf), '\033') == NULL);
     ASSERT_TRUE(strstr(buf, "Tudo certo") != NULL);
     ASSERT_TRUE(strstr(buf, "linha 2") != NULL);
@@ -263,14 +262,6 @@ static void teste_caixa_centralizada_alinhada(void)
     fclose(f);
 }
 
-static void teste_cor_sombra_retro(void)
-{
-    ui_definir_cor(1);
-    ASSERT_TRUE(strlen(ui_cor(UI_COR_SOMBRA)) > 0);
-    ui_definir_cor(0);
-    ASSERT_STR_EQ("", ui_cor(UI_COR_SOMBRA));
-}
-
 int main(void)
 {
     ui_init();
@@ -289,6 +280,5 @@ int main(void)
     RUN_TEST(teste_cores_retro_novas);
     RUN_TEST(teste_largura_terminal);
     RUN_TEST(teste_caixa_centralizada_alinhada);
-    RUN_TEST(teste_cor_sombra_retro);
     return tf_resumo("test_ui");
 }

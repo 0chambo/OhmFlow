@@ -30,9 +30,8 @@ enum {
     UI_COR_RESET, UI_COR_NEGRITO, UI_COR_DIM,
     UI_COR_VERMELHO, UI_COR_VERDE, UI_COR_AMARELO, UI_COR_AZUL,
     UI_COR_MAGENTA, UI_COR_CIANO, UI_COR_BRANCO,
-    UI_COR_BORDA, UI_COR_TITULO, UI_COR_DESTAQUE, UI_COR_PROMPT,
+    UI_COR_BORDA, UI_COR_TITULO, UI_COR_PROMPT,
     UI_COR_LARANJA, UI_COR_VERDE_NEON, UI_COR_ROXO_NEON,
-    UI_COR_SOMBRA,
     UI_COR_TOTAL
 };
 
@@ -80,7 +79,6 @@ void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
 void ui_caixa_centralizada(int estilo, int cor_borda, const char *titulo_borda,
                            const char *cabecalho, const char *const *linhas, int n,
                            int largura_min);
-void ui_caixa_titulo(const char *titulo);
 void ui_caixa_feedback(int tipo, const char *titulo, const char *fmt, ...);
 
 /* Mensagens de uma linha */
