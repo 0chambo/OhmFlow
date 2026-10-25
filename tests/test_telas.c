@@ -100,6 +100,89 @@ static void teste_navegar_tecla_ignorada(void)
     ASSERT_EQ_INT(7, navegar_menu(7, 'z'));
 }
 
+/* ---- decodifica_tecla: sequências de bytes do terminal ------------------- */
+
+/* Fonte falsa de bytes: devolve a sequência e conta leituras bloqueantes
+ * feitas depois da primeira (não podem existir: travariam o menu). */
+typedef struct {
+    const int *bytes;
+    int n, pos;
+    int bloqueios_extras;
+} Fonte;
+
+static int fonte_proximo(void *ctx, int bloqueia)
+{
+    Fonte *f = ctx;
+    if (bloqueia && f->pos > 0) f->bloqueios_extras++;
+    if (f->pos >= f->n) return bloqueia ? EOF : TECLA_TIMEOUT;
+    return f->bytes[f->pos++];
+}
+
+static int decodifica(const int *bytes, int n, Fonte *f)
+{
+    f->bytes = bytes;
+    f->n = n;
+    f->pos = 0;
+    f->bloqueios_extras = 0;
+    return decodifica_tecla(fonte_proximo, f);
+}
+
+static void teste_tecla_comum(void)
+{
+    static const int w[] = { 'w' }, enter[] = { '\n' }, dig[] = { '7' };
+    Fonte f;
+    ASSERT_EQ_INT('w', decodifica(w, 1, &f));
+    ASSERT_EQ_INT('\n', decodifica(enter, 1, &f));
+    ASSERT_EQ_INT('7', decodifica(dig, 1, &f));
+}
+
+static void teste_tecla_setas(void)
+{
+    static const int cima[] = { 27, '[', 'A' }, baixo[] = { 27, '[', 'B' };
+    static const int dir[] = { 27, '[', 'C' }, esq[] = { 27, '[', 'D' };
+    static const int ss3[] = { 27, 'O', 'A' }; /* modo "application cursor" */
+    Fonte f;
+    ASSERT_EQ_INT(KEY_UP, decodifica(cima, 3, &f));
+    ASSERT_EQ_INT(KEY_DOWN, decodifica(baixo, 3, &f));
+    ASSERT_EQ_INT(KEY_RIGHT, decodifica(dir, 3, &f));
+    ASSERT_EQ_INT(KEY_LEFT, decodifica(esq, 3, &f));
+    ASSERT_EQ_INT(KEY_UP, decodifica(ss3, 3, &f));
+    ASSERT_EQ_INT(0, f.bloqueios_extras);
+}
+
+static void teste_tecla_fim_da_entrada(void)
+{
+    static const int ctrl_d[] = { 4 };
+    Fonte f;
+    ASSERT_EQ_INT(KEY_FIM, decodifica(NULL, 0, &f)); /* EOF / terminal fechado */
+    ASSERT_EQ_INT(KEY_FIM, decodifica(ctrl_d, 1, &f));
+}
+
+static void teste_tecla_esc_isolado_nao_trava(void)
+{
+    static const int esc[] = { 27 };
+    Fonte f;
+    ASSERT_EQ_INT(KEY_IGNORADA, decodifica(esc, 1, &f));
+    ASSERT_EQ_INT(0, f.bloqueios_extras); /* não esperou outra tecla */
+}
+
+static void teste_tecla_esc_sequencia_desconhecida(void)
+{
+    static const int alt_x[] = { 27, 'x' }, csi_z[] = { 27, '[', 'Z' };
+    static const int csi_cortado[] = { 27, '[' };
+    Fonte f;
+    ASSERT_EQ_INT(KEY_IGNORADA, decodifica(alt_x, 2, &f));
+    ASSERT_EQ_INT(KEY_IGNORADA, decodifica(csi_z, 3, &f));
+    ASSERT_EQ_INT(KEY_IGNORADA, decodifica(csi_cortado, 2, &f));
+    ASSERT_EQ_INT(0, f.bloqueios_extras);
+}
+
+static void teste_navegar_ignora_teclas_especiais(void)
+{
+    ASSERT_EQ_INT(3, navegar_menu(3, KEY_IGNORADA));
+    ASSERT_EQ_INT(6, navegar_menu(6, KEY_FIM));
+}
+
 /* ---- desenha_menu: borda laranja + destaque ------------------------------ */
 
 static FILE *abre_temp(void)
@@ -184,6 +267,12 @@ int main(void)
     RUN_TEST(teste_navegar_sem_mover_na_borda);
     RUN_TEST(teste_navegar_horizontal_de_sair);
     RUN_TEST(teste_navegar_tecla_ignorada);
+    RUN_TEST(teste_tecla_comum);
+    RUN_TEST(teste_tecla_setas);
+    RUN_TEST(teste_tecla_fim_da_entrada);
+    RUN_TEST(teste_tecla_esc_isolado_nao_trava);
+    RUN_TEST(teste_tecla_esc_sequencia_desconhecida);
+    RUN_TEST(teste_navegar_ignora_teclas_especiais);
     RUN_TEST(teste_menu_cor_laranja_na_borda);
     RUN_TEST(teste_menu_opcao_selecionada_laranja);
 

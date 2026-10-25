@@ -8,6 +8,7 @@
  */
 #include <errno.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -194,6 +195,89 @@ void tela_boas_vindas(void)
 
 /* ---- [2] menu principal ----------------------------------------------- */
 
+#define TECLA_ESC    27
+#define TECLA_CTRL_D 4
+
+int decodifica_tecla(int (*proximo)(void *ctx, int bloqueia), void *ctx)
+{
+    int c = proximo(ctx, 1);
+    if (c == EOF || c == TECLA_CTRL_D) return KEY_FIM;
+    if (c != TECLA_ESC) return c;
+
+    /* ESC: só é seta se '[' ou 'O' chegar logo em seguida */
+    c = proximo(ctx, 0);
+    if (c == EOF) return KEY_FIM;
+    if (c != '[' && c != 'O') return KEY_IGNORADA; /* ESC isolado ou Alt+tecla */
+    c = proximo(ctx, 0);
+    if (c == EOF) return KEY_FIM;
+    if (c == 'A') return KEY_UP;
+    if (c == 'B') return KEY_DOWN;
+    if (c == 'C') return KEY_RIGHT;
+    if (c == 'D') return KEY_LEFT;
+    return KEY_IGNORADA;
+}
+
+/* Cursor escondido pelo menu: restaurado também se o processo for interrompido */
+static volatile sig_atomic_t cursor_oculto = 0;
+
+#ifndef _WIN32
+/* Modo do terminal antes de ler_tecla() entrar em modo raw */
+static struct termios term_original;
+static volatile sig_atomic_t term_raw = 0;
+
+/* Lê um byte; sem `bloqueia`, espera no máximo 0,1 s (VTIME) */
+// cppcheck-suppress constParameterCallback ; assinatura fixada por decodifica_tecla
+static int le_byte_terminal(void *ctx, int bloqueia)
+{
+    struct termios t = *(const struct termios *)ctx;
+    unsigned char b;
+    t.c_cc[VMIN]  = bloqueia ? 1 : 0;
+    t.c_cc[VTIME] = bloqueia ? 0 : 1;
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &t) != 0) return bloqueia ? EOF : TECLA_TIMEOUT;
+    for (;;) {
+        long n = (long)read(STDIN_FILENO, &b, 1);
+        if (n == 1) return b;
+        if (n < 0 && errno == EINTR) continue;
+        if (n == 0 && !bloqueia) return TECLA_TIMEOUT;
+        return EOF; /* terminal fechado ou erro de leitura */
+    }
+}
+#endif
+
+static void restaura_terminal_e_sai(int sinal)
+{
+#ifndef _WIN32
+    if (term_raw) tcsetattr(STDIN_FILENO, TCSANOW, &term_original);
+    if (cursor_oculto && write(STDOUT_FILENO, "\033[?25h", 6) < 0) {
+        /* nada a fazer: o processo está encerrando */
+    }
+#endif
+    signal(sinal, SIG_DFL);
+    raise(sinal);
+}
+
+/* Instala (uma vez) os tratadores que devolvem terminal e cursor ao normal */
+static void protege_terminal(void)
+{
+    static int instalado = 0;
+    if (instalado) return;
+    instalado = 1;
+    signal(SIGINT, restaura_terminal_e_sai);
+    signal(SIGTERM, restaura_terminal_e_sai);
+#ifdef SIGHUP
+    signal(SIGHUP, restaura_terminal_e_sai);
+#endif
+#ifdef SIGQUIT
+    signal(SIGQUIT, restaura_terminal_e_sai);
+#endif
+}
+
+static void mostra_cursor(int visivel)
+{
+    cursor_oculto = !visivel;
+    ui_cursor(visivel);
+}
+
 static int ler_tecla(void)
 {
 #ifdef _WIN32
@@ -204,30 +288,23 @@ static int ler_tecla(void)
         if (c2 == 80) return KEY_DOWN;
         if (c2 == 75) return KEY_LEFT;
         if (c2 == 77) return KEY_RIGHT;
-        return c2;
+        return KEY_IGNORADA;
     }
     return c;
 #else
-    struct termios old_t, raw_t;
+    struct termios raw_t;
     int c;
-    tcgetattr(STDIN_FILENO, &old_t);
-    raw_t = old_t;
-    raw_t.c_lflag &= ~((tcflag_t)(ICANON | ECHO));
-    raw_t.c_cc[VMIN] = 1;
-    raw_t.c_cc[VTIME] = 0;
-    tcsetattr(STDIN_FILENO, TCSANOW, &raw_t);
-    c = getchar();
-    if (c == 27) {
-        int c2 = getchar();
-        if (c2 == '[') {
-            int c3 = getchar();
-            if      (c3 == 'A') c = KEY_UP;
-            else if (c3 == 'B') c = KEY_DOWN;
-            else if (c3 == 'C') c = KEY_RIGHT;
-            else if (c3 == 'D') c = KEY_LEFT;
-        }
+    if (tcgetattr(STDIN_FILENO, &term_original) != 0) {
+        /* sem controle do terminal: leitura comum, EOF ainda encerra */
+        c = getchar();
+        return c == EOF ? KEY_FIM : c;
     }
-    tcsetattr(STDIN_FILENO, TCSANOW, &old_t);
+    raw_t = term_original;
+    raw_t.c_lflag &= ~((tcflag_t)(ICANON | ECHO));
+    term_raw = 1;
+    c = decodifica_tecla(le_byte_terminal, &raw_t);
+    tcsetattr(STDIN_FILENO, TCSANOW, &term_original);
+    term_raw = 0;
     return c;
 #endif
 }
@@ -372,7 +449,8 @@ int tela_menu(Lista *li)
     }
 
     /* Modo interativo: navegação por teclado */
-    ui_cursor(0); /* esconde cursor piscante durante navegação */
+    protege_terminal();
+    mostra_cursor(0); /* esconde cursor piscante durante navegação */
     for (;;) {
         int c, pad, i;
         ui_limpar_tela();
@@ -385,11 +463,14 @@ int tela_menu(Lista *li)
 
         c = ler_tecla();
 
+        /* Fim da entrada (EOF, Ctrl+D, terminal fechado) encerra como Sair */
+        if (c == KEY_FIM) { mostra_cursor(1); return OPCAO_SAIR; }
+
         /* Acesso rápido por dígito */
-        if (c >= '0' && c <= '8') { ui_cursor(1); return c - '0'; }
+        if (c >= '0' && c <= '8') { mostra_cursor(1); return c - '0'; }
 
         /* Enter confirma seleção atual */
-        if (c == '\r' || c == '\n') { ui_cursor(1); return selecao; }
+        if (c == '\r' || c == '\n') { mostra_cursor(1); return selecao; }
 
         selecao = navegar_menu(selecao, c);
     }
