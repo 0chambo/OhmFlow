@@ -41,3 +41,40 @@ jobs:
       - name: Saída do e2e (em caso de falha)
         if: failure()
         run: cat build/e2e_saida.txt build/asan/e2e_saida.txt 2>/dev/null || true
+
+  build-test-windows:
+    name: Build e testes (Windows, MinGW UCRT64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar MSYS2 (gcc, binutils, make)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: make
+          pacboy: gcc:p
+
+      - name: Versões
+        run: |
+          gcc --version | head -1
+          make --version | head -1
+          windres --version | head -1
+
+      - name: Build (warnings viram erro)
+        run: make EXTRA_CFLAGS=-Werror all
+
+      - name: Testes unitários
+        run: make EXTRA_CFLAGS=-Werror test
+
+      - name: Teste ponta a ponta (menu + subsistema console)
+        run: make e2e
+
+      - name: Saída do e2e (em caso de falha)
+        if: failure()
+        run: cat build/e2e_saida.txt 2>/dev/null || true

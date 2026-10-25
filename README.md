@@ -418,7 +418,14 @@ Para validar tudo de uma vez:
 make clean; make EXTRA_CFLAGS=-Werror all test e2e cppcheck
 ```
 
-O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda tudo isso, com `-Werror` e também o `make asan`, a cada push ou pull request em `main` e `Grolla`.
+O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push ou pull request em `main` e `Grolla`, em dois jobs:
+
+| Job | Ambiente | O que roda |
+| --- | --- | --- |
+| Build, testes e análise | Ubuntu (`ubuntu-latest`) | `make all test e2e` com `-Werror`, `make asan` e `make cppcheck` |
+| Build e testes (Windows) | Windows (`windows-latest`, MSYS2 UCRT64) | `make all test e2e` com `-Werror`, cobrindo o código `#ifdef _WIN32`, o ícone (`windres`) e a checagem de subsistema console |
+
+O ícone `src/assets/ohmflow.ico` é versionado, então o build não precisa de Python. Se trocar o `logo.png`, regenere o ícone com `make icone` (requer Python com Pillow) e faça commit do `.ico`.
 
 ## Referência
 
