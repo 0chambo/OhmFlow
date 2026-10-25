@@ -19,13 +19,15 @@ ifeq ($(OS),Windows_NT)
   WINDRES = windres
   ICO     = src/assets/ohmflow.ico
   RES_OBJ = $(BUILD)/ohmflow_res.o
-  LDFLAGS_APP = -mwindows
+  # Subsistema console (CUI): cmd/PowerShell esperam o programa terminar (issue #11)
+  CHECA_SUBSISTEMA = objdump -p $(BIN) | grep -q '(Windows CUI)' \
+                     || { echo "E2E FALHOU: $(BIN) nao usa o subsistema console (CUI)"; exit 1; }
 else
   EXE     =
   WINDRES =
   ICO     =
   RES_OBJ =
-  LDFLAGS_APP =
+  CHECA_SUBSISTEMA = true
 endif
 
 SRC_LIB   = src/lista.c src/formatacao.c src/ui/ui.c src/ui/telas.c
@@ -56,7 +58,7 @@ $(RES_OBJ): src/assets/ohmflow.rc $(ICO) | $(BUILD)
 
 $(BIN): $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(HEADERS)
 	mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(LDLIBS) $(LDFLAGS_APP)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(LDLIBS)
 
 $(BUILD)/test_%$(EXE): tests/test_%.c tests/test_framework.h $(SRC_LIB) $(HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Itests -o $@ $< $(SRC_LIB) $(LDLIBS)
@@ -70,6 +72,7 @@ test: $(TEST_BINS)
 # Roda o binário real com a entrada roteirizada e confere, EM ORDEM, cada linha
 # de esperado.txt contra a saída (linhas vazias de esperado.txt são ignoradas).
 e2e: $(BIN) | $(BUILD)
+	@$(CHECA_SUBSISTEMA)
 	@NO_COLOR=1 ./$(BIN) < $(E2E_ENTRADA) > $(E2E_SAIDA) 2>&1 || { echo "E2E FALHOU: programa saiu com erro"; exit 1; }
 	@awk 'NR==FNR { sub(/\r$$/, ""); if (length($$0)) esp[++n] = $$0; next } \
 	     { sub(/\r$$/, ""); if (i < n && index($$0, esp[i+1])) i++ } \
