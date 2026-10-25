@@ -86,9 +86,9 @@ int tamanho_lista(Lista *li)
     return n;
 }
 
-long total_pecas(Lista *li)
+long long total_pecas(Lista *li)
 {
-    long total = 0;
+    long long total = 0; /* int * nós não cabe em long de 32 bits */
     const Elem *no;
     if (li == NULL) return 0;
     for (no = *li; no != NULL; no = no->prox) total += no->dados.quantidade;
