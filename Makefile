@@ -6,6 +6,7 @@
 #   make asan       testes + e2e com AddressSanitizer/UBSan (Linux/CI)
 #   make cppcheck   análise estática
 #   make clean      remove build/ e dist/
+#   make icone      regenera src/assets/ohmflow.ico a partir do logo (Windows, Pillow)
 
 CC           = gcc
 CFLAGS       = -std=c99 -Wall -Wextra -pedantic -g -Isrc -Isrc/ui
@@ -43,15 +44,23 @@ E2E_SAIDA    = $(BUILD)/e2e_saida.txt
 
 ASAN_FLAGS = -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
 
-.PHONY: all run test e2e asan cppcheck clean
+.PHONY: all run test e2e asan cppcheck clean icone
 
 all: $(BIN)
 
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(ICO): src/assets/logo.png
-	python -c "from PIL import Image; img=Image.open('$<').convert('RGBA'); img.save('$@', format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+# O .ico é versionado: só é gerado (Python + Pillow) se estiver faltando, para
+# um checkout limpo não depender da data de logo.png. Para regenerar após
+# trocar o logo: make icone
+GERA_ICO = python -c "from PIL import Image; img=Image.open('src/assets/logo.png').convert('RGBA'); img.save('$(ICO)', format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+
+$(ICO): | src/assets/logo.png
+	$(GERA_ICO)
+
+icone: src/assets/logo.png
+	$(GERA_ICO)
 
 $(RES_OBJ): src/assets/ohmflow.rc $(ICO) | $(BUILD)
 	$(WINDRES) $< -o $@
