@@ -3,7 +3,7 @@
 #   make run        executa o programa
 #   make test       testes unitários
 #   make e2e        teste ponta a ponta (menu alimentado por tests/e2e/entrada.txt)
-#   make asan       testes + e2e com AddressSanitizer/UBSan (Linux/CI)
+#   make asan       testes + e2e com ASan/UBSan (nao roda no MinGW; fora do CI)
 #   make cppcheck   análise estática
 #   make clean      remove build/ e dist/
 #   make icone      regenera src/assets/ohmflow.ico a partir do logo (Windows, Pillow)

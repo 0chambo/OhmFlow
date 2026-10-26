@@ -264,9 +264,9 @@ Detalhes:
 
 O texto digitado é convertido para Ω por um único `strtod` sobre a forma decimal com expoente (`"470m"` vira `"470.0e-3"`). Assim, grafias diferentes do mesmo valor (`470m`, `0.47`, `0,47`) geram exatamente o mesmo `double`. Multiplicar por `0,001` não garantia isso, porque esse número não é exato em binário. A comparação com tolerância (`mesma_resistencia`) continua como rede de segurança.
 
-## Instalação dos pré-requisitos
+## Instalação dos pré-requisitos (Windows 10/11)
 
-Este guia parte de um computador sem nenhuma ferramenta de programação instalada. Você vai precisar de:
+O OhmFlow é suportado **somente no Windows**. Este guia parte de um computador sem nenhuma ferramenta de programação e usa **só o PowerShell**: não é preciso abrir nenhum outro terminal.
 
 | Ferramenta | Para que serve | Obrigatória? |
 | --- | --- | --- |
@@ -275,161 +275,102 @@ Este guia parte de um computador sem nenhuma ferramenta de programação instala
 | **make** | roda os comandos de build e de teste do `Makefile` | sim |
 | **cppcheck** | análise estática do código (`make cppcheck`) | não |
 
-### Windows 10/11 — MSYS2
+As quatro ferramentas vêm do [MSYS2](https://www.msys2.org/), que instala no Windows o gerenciador de pacotes `pacman`. Abra o **PowerShell** e siga os passos em ordem.
 
-O [MSYS2](https://www.msys2.org/) instala no Windows um terminal estilo Linux com o gerenciador de pacotes `pacman`, de onde vêm o gcc, o make e o git.
-
-**1. Instale o MSYS2.** Escolha uma das opções:
-
-- Pelo **PowerShell** (já vem com o Windows):
-
-  ```powershell
-  winget install --id MSYS2.MSYS2 -e
-  ```
-
-- Ou baixe o instalador em [msys2.org](https://www.msys2.org/), execute e aceite a pasta padrão `C:\msys64`.
-
-**2. Abra o terminal certo.** No menu Iniciar, procure e abra **MSYS2 UCRT64**. Há vários atalhos do MSYS2 (MSYS, MINGW64, CLANG64...), e os comandos abaixo só funcionam no **UCRT64**. Para conferir, rode:
-
-```sh
-echo $MSYSTEM     # deve mostrar: UCRT64
-```
-
-**3. Atualize o MSYS2.** No terminal UCRT64:
-
-```sh
-pacman -Syu
-```
-
-Responda `Y` quando perguntar. Se o terminal pedir para fechar, feche, abra o **MSYS2 UCRT64** de novo e termine a atualização com:
-
-```sh
-pacman -Su
-```
-
-**4. Instale as ferramentas:**
-
-```sh
-pacman -S --needed git make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cppcheck
-```
-
-**5. Confira a instalação.** Cada comando deve imprimir uma versão:
-
-```sh
-gcc --version
-make --version
-git --version
-cppcheck --version
-```
-
-> **Caminhos no MSYS2:** os discos do Windows aparecem como `/c/`, `/d/`... Por exemplo, `D:\GitHub` vira `/d/GitHub`. O terminal começa na sua pasta pessoal do MSYS2 (`~`).
-
-#### Usar pelo PowerShell, sem abrir o MSYS2
-
-Depois da instalação acima, o `gcc`, o `make` e o `git` também rodam direto no PowerShell. Basta o PowerShell enxergar duas pastas do MSYS2: `C:\msys64\ucrt64\bin` (gcc) e `C:\msys64\usr\bin` (make, git e utilitários que o `Makefile` usa).
-
-Só na janela atual (vale até fechar o PowerShell):
+**1. Instale o MSYS2** (a pasta padrão é `C:\msys64`):
 
 ```powershell
-$env:Path += ';C:\msys64\ucrt64\bin;C:\msys64\usr\bin'
+winget install --id MSYS2.MSYS2 -e
 ```
 
-Ou de forma permanente, para todo PowerShell novo (rode uma vez e abra outro PowerShell):
+**2. Atualize o MSYS2.** Rode o comando **duas vezes**: na primeira, o `pacman` atualiza o próprio núcleo; na segunda, o resto dos pacotes.
+
+```powershell
+C:\msys64\usr\bin\bash.exe -lc "pacman -Syu --noconfirm"
+```
+
+**3. Instale as ferramentas:**
+
+```powershell
+C:\msys64\usr\bin\bash.exe -lc "pacman -S --needed --noconfirm git make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cppcheck"
+```
+
+**4. Coloque as ferramentas no `Path`.** O PowerShell precisa enxergar duas pastas do MSYS2: `C:\msys64\ucrt64\bin` (gcc, cppcheck) e `C:\msys64\usr\bin` (make, git e utilitários que o `Makefile` usa). Rode uma vez e **abra um PowerShell novo**:
 
 ```powershell
 $atual = [Environment]::GetEnvironmentVariable('Path', 'User')
 [Environment]::SetEnvironmentVariable('Path', "$atual;C:\msys64\ucrt64\bin;C:\msys64\usr\bin", 'User')
 ```
 
-As pastas entram no **fim** do `Path`, assim os comandos do Windows com o mesmo nome (`find`, `sort`...) continuam valendo. Confira:
+As pastas entram no **fim** do `Path`, assim os comandos do Windows com o mesmo nome (`find`, `sort`...) continuam valendo. Para testar sem mexer no `Path` permanente, use só na janela atual:
+
+```powershell
+$env:Path += ';C:\msys64\ucrt64\bin;C:\msys64\usr\bin'
+```
+
+**5. Confira a instalação.** Cada comando deve imprimir uma versão:
 
 ```powershell
 gcc --version
 make --version
-```
-
-### Linux
-
-Debian/Ubuntu:
-
-```sh
-sudo apt update
-sudo apt install -y build-essential git cppcheck
-```
-
-Fedora:
-
-```sh
-sudo dnf install -y gcc make git cppcheck
-```
-
-### macOS
-
-```sh
-xcode-select --install     # instala clang (atende pelo nome gcc), make e git
-brew install cppcheck      # opcional; requer o Homebrew (https://brew.sh)
+git --version
+cppcheck --version
 ```
 
 ## Baixar o projeto
 
-No **PowerShell** (Windows, após a seção acima) ou em qualquer terminal Linux/macOS, vá até a pasta onde quer guardar o projeto e clone:
+No PowerShell, vá até a pasta onde quer guardar o projeto e clone:
 
 ```powershell
-cd D:\GitHub        # exemplo no Windows; no Linux/macOS use qualquer pasta
+cd D:\GitHub        # exemplo: qualquer pasta serve
 git clone https://github.com/Grolla05/OhmFlow.git
 cd OhmFlow
 ```
 
-Sem Git, também dá para baixar o ZIP no GitHub (**Code → Download ZIP**), extrair e abrir a pasta no terminal com `cd`. Quem preferir o terminal **MSYS2 UCRT64** pode usá-lo: lá o caminho fica `/d/GitHub`.
+Sem Git, também dá para baixar o ZIP no GitHub (**Code → Download ZIP**), extrair e abrir a pasta no PowerShell com `cd`.
 
 ## Compilar e executar
 
 O executável final sai na pasta **`dist/`**. Os arquivos intermediários e os testes ficam em `build/`. As duas pastas são ignoradas pelo Git.
 
-Na pasta do projeto, no **PowerShell** (Windows) ou no terminal (Linux/macOS):
+Na pasta do projeto, no PowerShell:
 
 ```powershell
-make            # compila dist/ohmflow (no Windows: dist\ohmflow.exe)
+make            # compila dist\ohmflow.exe
 make clean      # remove build/ e dist/
 ```
 
 Para executar:
 
 ```powershell
-.\dist\ohmflow.exe      # Windows (PowerShell, cmd ou Windows Terminal)
-./dist/ohmflow          # Linux/macOS
+.\dist\ohmflow.exe
 ```
 
-### Executando no Windows
+Rode pelo **Windows Terminal, PowerShell ou cmd**. O terminal do MSYS2 (mintty) não é reconhecido como console interativo: nele, cores, limpeza de tela e pausas ficam desligadas.
 
-Rode o `dist\ohmflow.exe` pelo **Windows Terminal, PowerShell ou cmd**, como acima. O terminal do MSYS2 (mintty) não é reconhecido como console interativo: nele, cores, limpeza de tela e pausas ficam desligadas.
-
-O `ohmflow.exe` depende só de DLLs do próprio Windows. Ele roda fora do MSYS2, e a pasta `dist/` pode ser copiada para outro computador.
+O `ohmflow.exe` depende só de DLLs do próprio Windows. Ele roda fora do MSYS2, e a pasta `dist/` pode ser copiada para outro computador com Windows.
 
 ### Opções
 
-- `NO_COLOR=1`: desliga as cores.
+- `$env:NO_COLOR=1`: desliga as cores.
 - `make EXTRA_CFLAGS=-DOHM_ASCII`: troca molduras e símbolos Unicode por ASCII (`+-|`, `ohm`), para terminais sem UTF-8.
 
 ### Problemas comuns
 
 | Sintoma | Causa / solução |
 | --- | --- |
-| `gcc` ou `make` não reconhecido no PowerShell | As pastas do MSYS2 não estão no `Path`. Rode o comando de [Usar pelo PowerShell](#usar-pelo-powershell-sem-abrir-o-msys2) e abra um PowerShell novo se foi a versão permanente. |
-| `gcc: command not found` no MSYS2 | O terminal aberto não é o **MSYS2 UCRT64** (`echo $MSYSTEM`), ou o passo 4 não foi feito. |
-| `make: command not found` no MSYS2 | Rode `pacman -S make` no UCRT64. |
+| `gcc` ou `make` não reconhecido no PowerShell | As pastas do MSYS2 não estão no `Path`. Refaça o passo 4 e abra um PowerShell novo. |
+| `winget` não reconhecido | Instale o **App Installer** pela Microsoft Store, ou baixe o instalador em [msys2.org](https://www.msys2.org/) e aceite a pasta `C:\msys64`. |
 | `Ω` e bordas aparecem como `Î©` ou `â•”` | O terminal não está em UTF-8. Use o Windows Terminal ou compile com `-DOHM_ASCII`. |
-| Sem cores, sem limpar tela, sem pausas | O programa está rodando no mintty ou com entrada/saída redirecionada. Execute no Windows Terminal. |
-| `make asan` falha no Windows | É esperado: o gcc do MinGW não tem AddressSanitizer. Esse alvo roda no Linux e no CI. |
+| Sem cores, sem limpar tela, sem pausas | O programa está rodando no mintty (terminal do MSYS2) ou com entrada/saída redirecionada. Execute no Windows Terminal. |
 
 ## Testes
 
-Os mesmos comandos valem no PowerShell (Windows), no Linux e no macOS:
+No PowerShell, na pasta do projeto:
 
 ```powershell
-make test       # testes unitários (lista, formatação, ui)
+make test       # testes unitários (lista, formatação, ui, telas)
 make e2e        # roda o programa com tests/e2e/entrada.txt e confere tests/e2e/esperado.txt
-make asan       # testes + e2e com AddressSanitizer/UBSan (Linux; o gcc do MinGW não suporta)
 make cppcheck   # análise estática
 ```
 
@@ -439,12 +380,7 @@ Para validar tudo de uma vez:
 make clean; make EXTRA_CFLAGS=-Werror all test e2e cppcheck
 ```
 
-O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push ou pull request em `main` e `Grolla`, em dois jobs:
-
-| Job | Ambiente | O que roda |
-| --- | --- | --- |
-| Build, testes e análise | Ubuntu (`ubuntu-latest`) | `make all test e2e` com `-Werror`, `make asan` e `make cppcheck` |
-| Build e testes (Windows) | Windows (`windows-latest`, MSYS2 UCRT64) | `make all test e2e` com `-Werror`, cobrindo o código `#ifdef _WIN32`, o ícone (`windres`) e a checagem de subsistema console |
+O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push ou pull request em `main` e `Grolla`, num único job **Windows** (`windows-latest`, MSYS2 UCRT64): `make all test e2e` com `-Werror`, a checagem de subsistema console e `make cppcheck`.
 
 O ícone `src/assets/ohmflow.ico` é versionado, então o build não precisa de Python. Se trocar o `logo.png`, regenere o ícone com `make icone` (requer Python com Pillow) e faça commit do `.ico`.
 
