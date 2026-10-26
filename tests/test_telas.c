@@ -162,8 +162,22 @@ static void teste_tecla_esc_isolado_nao_trava(void)
 {
     static const int esc[] = { 27 };
     Fonte f;
-    ASSERT_EQ_INT(KEY_IGNORADA, decodifica(esc, 1, &f));
+    ASSERT_EQ_INT(KEY_ESC, decodifica(esc, 1, &f)); /* ESC sozinho: tecla Esc */
     ASSERT_EQ_INT(0, f.bloqueios_extras); /* não esperou outra tecla */
+}
+
+static void teste_menu_esc_sai(void)
+{
+    /* Esc no menu aciona Sair na hora; demais teclas seguem o fluxo normal */
+    ASSERT_EQ_INT(OPCAO_SAIR, menu_tecla_opcao(KEY_ESC, 3));
+    ASSERT_EQ_INT(OPCAO_SAIR, menu_tecla_opcao(KEY_ESC, 0));
+    ASSERT_EQ_INT(OPCAO_SAIR, menu_tecla_opcao(KEY_FIM, 5));
+    ASSERT_EQ_INT(OPCAO_LISTAR, menu_tecla_opcao('3', 7));
+    ASSERT_EQ_INT(6, menu_tecla_opcao('\r', 6));
+    ASSERT_EQ_INT(6, menu_tecla_opcao('\n', 6));
+    ASSERT_EQ_INT(MENU_CONTINUA, menu_tecla_opcao(KEY_UP, 2));
+    ASSERT_EQ_INT(MENU_CONTINUA, menu_tecla_opcao(KEY_IGNORADA, 2));
+    ASSERT_EQ_INT(MENU_CONTINUA, menu_tecla_opcao('9', 2));
 }
 
 static void teste_tecla_esc_sequencia_desconhecida(void)
@@ -181,6 +195,7 @@ static void teste_navegar_ignora_teclas_especiais(void)
 {
     ASSERT_EQ_INT(3, navegar_menu(3, KEY_IGNORADA));
     ASSERT_EQ_INT(6, navegar_menu(6, KEY_FIM));
+    ASSERT_EQ_INT(4, navegar_menu(4, KEY_ESC));
 }
 
 /* ---- desenha_menu: borda laranja + destaque ------------------------------ */
@@ -272,6 +287,7 @@ int main(void)
     RUN_TEST(teste_tecla_fim_da_entrada);
     RUN_TEST(teste_tecla_esc_isolado_nao_trava);
     RUN_TEST(teste_tecla_esc_sequencia_desconhecida);
+    RUN_TEST(teste_menu_esc_sai);
     RUN_TEST(teste_navegar_ignora_teclas_especiais);
     RUN_TEST(teste_menu_cor_laranja_na_borda);
     RUN_TEST(teste_menu_opcao_selecionada_laranja);

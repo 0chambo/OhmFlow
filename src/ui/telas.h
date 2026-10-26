@@ -28,7 +28,11 @@ enum {
 #define KEY_LEFT  258
 #define KEY_RIGHT 259
 #define KEY_FIM      260 /* fim da entrada (EOF, Ctrl+D): menu encerra como Sair */
-#define KEY_IGNORADA 261 /* ESC isolado, Alt+tecla ou sequência desconhecida   */
+#define KEY_IGNORADA 261 /* Alt+tecla ou sequência desconhecida               */
+#define KEY_ESC      262 /* tecla Esc sozinha: no menu, aciona Sair na hora   */
+
+/* Retorno de menu_tecla_opcao() quando a tecla não encerra o menu */
+#define MENU_CONTINUA (-1)
 
 /* Retorno de `proximo` quando nenhum byte chega dentro do prazo curto */
 #define TECLA_TIMEOUT (-2)
@@ -43,6 +47,10 @@ int decodifica_tecla(int (*proximo)(void *ctx, int bloqueia), void *ctx);
 
 /* Retorna nova seleção (0-8) dado a seleção atual e uma tecla KEY_* */
 int navegar_menu(int selecao, int tecla);
+
+/* Opção escolhida pela tecla no menu (Esc/EOF -> OPCAO_SAIR, dígito, Enter
+ * na `selecao`) ou MENU_CONTINUA se a tecla só navega ou é ignorada */
+int menu_tecla_opcao(int tecla, int selecao);
 
 /* Redesenha o menu com a opção `selecao` destacada */
 void desenha_menu(const Lista *li, int selecao);

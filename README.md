@@ -18,6 +18,15 @@ Programa em C que controla o estoque de resistores do almoxarifado de um laborat
 | 8 | Diferencial | a definir |
 | 0 | Sair | encerra o programa e libera a memória |
 
+### Teclas do menu
+
+| Tecla | Ação |
+| --- | --- |
+| Setas ou `W` `A` `S` `D` | move a seleção |
+| `0` a `8` | abre a opção direto |
+| `Enter` | confirma a opção selecionada |
+| `Esc` | sai do programa na hora (o mesmo que `0 - Sair`) |
+
 ### Como digitar resistências
 
 A lista guarda os valores em Ω, mas a entrada aceita os formatos usados no laboratório:
