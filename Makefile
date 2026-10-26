@@ -7,6 +7,8 @@
 #   make cppcheck   análise estática
 #   make clean      remove build/ e dist/
 #   make icone      regenera src/assets/ohmflow.ico a partir do logo (Windows, Pillow)
+#   make setup      gera dist/ohm_flow_setup.exe (Windows, Inno Setup 6) [VERSAO=x.y.z]
+#   make teste-setup  instala o setup em silencio, roda o programa e desinstala
 
 CC           = gcc
 CFLAGS       = -std=c99 -Wall -Wextra -pedantic -g -Isrc -Isrc/ui
@@ -14,6 +16,11 @@ EXTRA_CFLAGS =
 LDLIBS       = -lm
 BUILD        = build
 DIST         = dist
+VERSAO      ?= 1.0.0
+
+# "1.2.3-ci" -> "1,2,3,0" (FILEVERSION numérico do recurso VERSIONINFO)
+virgula      = ,
+VERSAO_NUM   = $(subst .,$(virgula),$(firstword $(subst -, ,$(VERSAO)))),0
 
 ifeq ($(OS),Windows_NT)
   EXE     = .exe
@@ -44,7 +51,9 @@ E2E_SAIDA    = $(BUILD)/e2e_saida.txt
 
 ASAN_FLAGS = -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
 
-.PHONY: all run test e2e asan cppcheck clean icone
+SETUP = $(DIST)/ohm_flow_setup.exe
+
+.PHONY: all run test e2e asan cppcheck clean icone setup teste-setup
 
 all: $(BIN)
 
@@ -63,7 +72,7 @@ icone: src/assets/logo.png
 	$(GERA_ICO)
 
 $(RES_OBJ): src/assets/ohmflow.rc $(ICO) | $(BUILD)
-	$(WINDRES) $< -o $@
+	$(WINDRES) -DVERSAO=$(VERSAO) -DVERSAO_NUM=$(VERSAO_NUM) $< -o $@
 
 $(BIN): $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(HEADERS)
 	mkdir -p $(@D)
@@ -91,6 +100,23 @@ e2e: $(BIN) | $(BUILD)
 
 asan:
 	$(MAKE) BUILD=$(BUILD)/asan DIST=$(BUILD)/asan EXTRA_CFLAGS="$(EXTRA_CFLAGS) $(ASAN_FLAGS)" test e2e
+
+# Instalador do usuário final. Procura o compilador do Inno Setup no PATH e nas
+# pastas padrão (Arquivos de Programas ou %LOCALAPPDATA%\Programs, onde o winget
+# instala por usuário). MSYS2_ARG_CONV_EXCL impede o MSYS de converter /Q e
+# /DVersao=... em caminhos.
+setup: $(BIN)
+	@iscc="$$(command -v iscc 2>/dev/null)"; \
+	for c in "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
+	         "$$(cygpath -u "$$LOCALAPPDATA" 2>/dev/null)/Programs/Inno Setup 6/ISCC.exe"; do \
+	  if [ -z "$$iscc" ] && [ -f "$$c" ]; then iscc="$$c"; fi; \
+	done; \
+	[ -n "$$iscc" ] || { echo "SETUP FALHOU: ISCC.exe (Inno Setup 6) nao encontrado. Instale com: winget install JRSoftware.InnoSetup"; exit 1; }; \
+	MSYS2_ARG_CONV_EXCL='*' "$$iscc" /Q /DVersao=$(VERSAO) installer/ohmflow.iss
+	@echo "Instalador gerado: $(SETUP)"
+
+teste-setup: setup
+	powershell -NoProfile -File tests/setup/test_setup.ps1
 
 cppcheck:
 	cppcheck --enable=warning,style,performance --error-exitcode=1 --inline-suppr --quiet -Isrc -Isrc/ui src/

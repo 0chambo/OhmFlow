@@ -3,21 +3,32 @@ name: CI
 on:
   push:
     branches: [main, Grolla]
+    tags: ['v*']
   pull_request:
     branches: [main, Grolla]
 
 # O OhmFlow é suportado só no Windows: um único job, no mesmo ambiente do
 # desenvolvimento (MSYS2 UCRT64 + gcc), com build, testes, e2e e cppcheck.
+# Depois gera o instalador (Inno Setup), testa instalar/desinstalar e o anexa
+# ao Release quando o push é de uma tag v*.
 jobs:
   build-test-windows:
-    name: Build, testes e análise (Windows, MinGW UCRT64)
+    name: Build, testes, análise e instalador (Windows, MinGW UCRT64)
     runs-on: windows-latest
+    permissions:
+      contents: write   # criar o Release nas tags v*
     defaults:
       run:
         shell: msys2 {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Versão (tag v1.2.3 -> 1.2.3; senão 0.0.0-ci)
+        shell: pwsh
+        run: |
+          $v = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0-ci' }
+          "VERSAO=$v" >> $env:GITHUB_ENV
 
       - name: Instalar MSYS2 (gcc, binutils, make, cppcheck)
         uses: msys2/setup-msys2@v2
@@ -27,8 +38,13 @@ jobs:
           install: make
           pacboy: gcc:p cppcheck:p
 
+      - name: Instalar Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
       - name: Versões
         run: |
+          echo "VERSAO=$VERSAO"
           gcc --version | head -1
           make --version | head -1
           windres --version | head -1
@@ -45,6 +61,21 @@ jobs:
 
       - name: Análise estática (cppcheck)
         run: make cppcheck
+
+      - name: Instalador (gera e testa instalar/rodar/desinstalar)
+        run: make teste-setup
+
+      - name: Publicar instalador como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ohm_flow_setup
+          path: dist/ohm_flow_setup.exe
+
+      - name: Anexar instalador ao Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ohm_flow_setup.exe
 
       - name: Saída do e2e (em caso de falha)
         if: failure()

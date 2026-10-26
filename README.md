@@ -4,6 +4,28 @@
 
 Programa em C que controla o estoque de resistores do almoxarifado de um laboratório usando uma **lista dinâmica ordenada**. Desenvolvido para a disciplina de Estrutura de Dados e Recuperação da Informação (Projeto 01).
 
+## Instalação rápida (Windows 10/11)
+
+Para só **usar** o programa, não é preciso instalar compilador nem nada pelo PowerShell:
+
+1. Baixe o `ohm_flow_setup.exe` da última versão em [Releases](https://github.com/Grolla05/OhmFlow/releases).
+2. Execute e avance o assistente. Por padrão ele instala só para o seu usuário, sem pedir administrador, em `%LOCALAPPDATA%\Programs\OhmFlow`.
+3. Abra o **OhmFlow** pelo Menu Iniciar.
+
+Opções do assistente:
+
+| Opção | Efeito |
+| --- | --- |
+| Instalar para todos os usuários | instala em `C:\Program Files\OhmFlow` (pede administrador) |
+| Criar um atalho na área de trabalho | atalho no desktop |
+| Adicionar o OhmFlow ao PATH | permite rodar `ohmflow` em qualquer terminal (abra um terminal novo depois) |
+
+Para desinstalar, use **Configurações → Aplicativos → Aplicativos instalados → OhmFlow**, ou o atalho "Desinstalar OhmFlow" no Menu Iniciar. O PATH também é limpo.
+
+O instalador não é assinado digitalmente. Por isso, o Windows SmartScreen pode mostrar "O Windows protegeu o computador". Clique em **Mais informações → Executar assim mesmo**.
+
+O programa depende só de DLLs que já vêm no Windows 10/11 (`KERNEL32`, `USER32` e a UCRT). O MSYS2, o gcc e o make descritos mais abaixo servem apenas para **compilar** o código.
+
 ## Funcionalidades
 
 | Opção | Função | Descrição |
@@ -273,7 +295,9 @@ Detalhes:
 
 O texto digitado é convertido para Ω por um único `strtod` sobre a forma decimal com expoente (`"470m"` vira `"470.0e-3"`). Assim, grafias diferentes do mesmo valor (`470m`, `0.47`, `0,47`) geram exatamente o mesmo `double`. Multiplicar por `0,001` não garantia isso, porque esse número não é exato em binário. A comparação com tolerância (`mesma_resistencia`) continua como rede de segurança.
 
-## Instalação dos pré-requisitos (Windows 10/11)
+## Compilar a partir do código: pré-requisitos (Windows 10/11)
+
+Esta parte é para quem vai **desenvolver** ou compilar. Para só usar, veja a [Instalação rápida](#instalação-rápida-windows-1011).
 
 O OhmFlow é suportado **somente no Windows**. Este guia parte de um computador sem nenhuma ferramenta de programação e usa **só o PowerShell**: não é preciso abrir nenhum outro terminal.
 
@@ -283,6 +307,7 @@ O OhmFlow é suportado **somente no Windows**. Este guia parte de um computador 
 | **gcc** | compilador C que gera o executável | sim |
 | **make** | roda os comandos de build e de teste do `Makefile` | sim |
 | **cppcheck** | análise estática do código (`make cppcheck`) | não |
+| **Inno Setup 6** | gera o instalador `ohm_flow_setup.exe` (`make setup`) | não |
 
 As quatro ferramentas vêm do [MSYS2](https://www.msys2.org/), que instala no Windows o gerenciador de pacotes `pacman`. Abra o **PowerShell** e siga os passos em ordem.
 
@@ -364,6 +389,26 @@ O `ohmflow.exe` depende só de DLLs do próprio Windows. Ele roda fora do MSYS2,
 - `$env:NO_COLOR=1`: desliga as cores.
 - `make EXTRA_CFLAGS=-DOHM_ASCII`: troca molduras e símbolos Unicode por ASCII (`+-|`, `ohm`), para terminais sem UTF-8.
 
+### Gerar o instalador
+
+O instalador é gerado com o [Inno Setup 6](https://jrsoftware.org/isinfo.php) a partir do script [installer/ohmflow.iss](installer/ohmflow.iss). Instale uma vez:
+
+```powershell
+winget install JRSoftware.InnoSetup
+```
+
+Depois, na pasta do projeto:
+
+```powershell
+make setup                 # gera dist\ohm_flow_setup.exe (versão padrão 1.0.0)
+make setup VERSAO=1.2.0    # define a versão do setup e do exe (Propriedades > Detalhes)
+make teste-setup           # gera, instala em silêncio, roda o programa instalado e desinstala
+```
+
+O `make setup` encontra o `ISCC.exe` no `Path`, em `C:\Program Files (x86)\Inno Setup 6` ou em `%LOCALAPPDATA%\Programs\Inno Setup 6` (onde o winget instala por usuário). Ao trocar a `VERSAO`, rode `make clean` antes, para o recurso de versão do exe ser recompilado.
+
+No CI, cada push gera o instalador como *artifact* (`ohm_flow_setup`). Um push de tag `v*` (ex.: `git tag v1.0.0; git push origin v1.0.0`) cria o Release no GitHub com o `ohm_flow_setup.exe` anexado.
+
 ### Problemas comuns
 
 | Sintoma | Causa / solução |
@@ -389,7 +434,7 @@ Para validar tudo de uma vez:
 make clean; make EXTRA_CFLAGS=-Werror all test e2e cppcheck
 ```
 
-O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push ou pull request em `main` e `Grolla`, num único job **Windows** (`windows-latest`, MSYS2 UCRT64): `make all test e2e` com `-Werror`, a checagem de subsistema console e `make cppcheck`.
+O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push ou pull request em `main` e `Grolla`, num único job **Windows** (`windows-latest`, MSYS2 UCRT64): `make all test e2e` com `-Werror`, a checagem de subsistema console, `make cppcheck` e `make teste-setup` (instalador gerado e testado).
 
 O ícone `src/assets/ohmflow.ico` é versionado, então o build não precisa de Python. Se trocar o `logo.png`, regenere o ícone com `make icone` (requer Python com Pillow) e faça commit do `.ico`.
 
