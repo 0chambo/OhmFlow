@@ -34,9 +34,9 @@ Lista *cria_lista(void);
 void   libera_lista(Lista *li);
 int    reinicializa_lista(Lista *li);
 
-int    tamanho_lista(Lista *li);
-long long total_pecas(Lista *li); /* long long: long tem 32 bits no Windows */
-int    lista_vazia(Lista *li);
+int    tamanho_lista(const Lista *li);
+long long total_pecas(const Lista *li); /* long long: long tem 32 bits no Windows */
+int    lista_vazia(const Lista *li);
 
 int    insere_lista_ordenada(Lista *li, Resistor r);
 int    remove_lista(Lista *li, double ohms);
@@ -45,11 +45,11 @@ int    retira_estoque(Lista *li, double ohms, int qtd);
 int    repor_estoque(Lista *li, double ohms, int qtd);
 
 /* Chama f(resistor, ctx) para cada nó, em ordem crescente */
-void   percorre_lista(Lista *li, void (*f)(const Resistor *r, void *ctx), void *ctx);
+void   percorre_lista(const Lista *li, void (*f)(const Resistor *r, void *ctx), void *ctx);
 
 /* Nós examinados pela última busca (consulta, retirada, reposição, inserção
  * ou remoção); mostra a parada antecipada da lista ordenada. 0 se li é NULL */
-int    lista_passos(Lista *li);
+int    lista_passos(const Lista *li);
 
 /* 1 se a e b representam a mesma resistência (tolerância relativa 1e-9) */
 int    mesma_resistencia(double a, double b);

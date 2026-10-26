@@ -347,7 +347,7 @@ int navegar_menu(int selecao, int tecla)
     return col == 0 ? row + 1 : row + 5;
 }
 
-void desenha_menu(Lista *li, int selecao)
+void desenha_menu(const Lista *li, int selecao)
 {
     static const char *const ROTULOS[OPCAO_TOTAL] = {
         "Sair", "Inserir", "Remover", "Listar", "Consultar",
@@ -409,7 +409,7 @@ void desenha_menu(Lista *li, int selecao)
 /* Linhas que o bloco do menu ocupa na tela (caixa + dica) */
 #define MENU_LINHAS 11
 
-int tela_menu(Lista *li)
+int tela_menu(const Lista *li)
 {
     int selecao = 1;
 
@@ -552,7 +552,7 @@ static void linha_estoque(const Resistor *r, void *ctx)
     ui_tabela_linha(celulas, TAB_LARG, TAB_DIR, 3);
 }
 
-void tela_listar(Lista *li)
+void tela_listar(const Lista *li)
 {
     char cab[3][48];
     const char *cabecalho[3];
@@ -719,7 +719,7 @@ void tela_diferencial(void)
 
 /* ---- [5] encerramento -------------------------------------------------- */
 
-void tela_encerramento(Lista *li)
+void tela_encerramento(const Lista *li)
 {
     char resumo[96];
     const char *linhas[2];

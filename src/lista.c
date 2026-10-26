@@ -113,27 +113,27 @@ int reinicializa_lista(Lista *li)
 
 /* ---- informações (O(1): lidas do descritor) ------------------------- */
 
-int tamanho_lista(Lista *li)
+int tamanho_lista(const Lista *li)
 {
     return li == NULL ? 0 : li->tipos;
 }
 
-long long total_pecas(Lista *li)
+long long total_pecas(const Lista *li)
 {
     return li == NULL ? 0 : li->pecas;
 }
 
-int lista_vazia(Lista *li)
+int lista_vazia(const Lista *li)
 {
     return li == NULL || li->inicio == NULL;
 }
 
-int lista_passos(Lista *li)
+int lista_passos(const Lista *li)
 {
     return li == NULL ? 0 : li->passos;
 }
 
-void percorre_lista(Lista *li, void (*f)(const Resistor *r, void *ctx), void *ctx)
+void percorre_lista(const Lista *li, void (*f)(const Resistor *r, void *ctx), void *ctx)
 {
     const Elem *no;
     if (li == NULL || f == NULL) return;
