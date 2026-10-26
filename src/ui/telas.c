@@ -612,6 +612,11 @@ void tela_consultar(Lista *li)
     } else {
         ui_mensagem(UI_ERRO, "%s não está no estoque", txt);
     }
+    /* a lista ordenada para no primeiro nó >= valor procurado */
+    {
+        int passos = lista_passos(li);
+        ui_dica("Busca: %d %s", passos, plural(passos, "nó visitado", "nós visitados"));
+    }
     voltar_ao_menu();
 }
 

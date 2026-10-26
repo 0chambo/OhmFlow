@@ -1,8 +1,9 @@
 /*
  * lista.c — implementação da Lista Dinâmica Ordenada de resistores.
  *
- * Lista simplesmente encadeada, sem nó cabeça: *li aponta para o primeiro
- * elemento (ou NULL se vazia). Os nós ficam em ordem crescente de resistência,
+ * Lista simplesmente encadeada com nó descritor: o descritor guarda o ponteiro
+ * para o primeiro elemento (NULL se vazia) e os totais de tipos e peças,
+ * atualizados a cada operação. Os nós ficam em ordem crescente de resistência,
  * o que permite encerrar as buscas assim que passamos do valor procurado.
  */
 #include <stdlib.h>
@@ -16,6 +17,13 @@ struct elemento {
 };
 typedef struct elemento Elem;
 
+struct descritor {
+    Elem     *inicio; /* primeiro nó, ou NULL se vazia     */
+    int       tipos;  /* quantidade de nós                 */
+    long long pecas;  /* soma das quantidades (long long: int * nós não cabe em long de 32 bits) */
+    int       passos; /* nós examinados pela última busca  */
+};
+
 #define TOLERANCIA_RELATIVA 1e-9
 
 int mesma_resistencia(double a, double b)
@@ -24,16 +32,37 @@ int mesma_resistencia(double a, double b)
     return fabs(a - b) <= TOLERANCIA_RELATIVA * maior;
 }
 
-/* Nó com a resistência pedida, ou NULL. Para cedo graças à ordenação. */
+/*
+ * Endereço do ponteiro que aponta (ou apontaria) para o nó `ohms`: o campo
+ * `inicio` do descritor ou o `prox` do nó anterior. Para no primeiro nó com
+ * resistência >= ohms, graças à ordenação. Com o ponteiro para ponteiro,
+ * inserir e remover no início, no meio ou no fim é o mesmo código.
+ */
+static Elem **localiza(Lista *li, double ohms)
+{
+    Elem **pp = &li->inicio;
+    li->passos = 0;
+    while (*pp != NULL) {
+        li->passos++;
+        if (!((*pp)->dados.resistencia < ohms
+              && !mesma_resistencia((*pp)->dados.resistencia, ohms)))
+            break;
+        pp = &(*pp)->prox;
+    }
+    return pp;
+}
+
+/* 1 se o nó existe e tem a resistência procurada */
+static int e_o_no(const Elem *no, double ohms)
+{
+    return no != NULL && mesma_resistencia(no->dados.resistencia, ohms);
+}
+
+/* Nó com a resistência pedida, ou NULL */
 static Elem *busca(Lista *li, double ohms)
 {
-    Elem *no = *li;
-    while (no != NULL && no->dados.resistencia < ohms
-           && !mesma_resistencia(no->dados.resistencia, ohms))
-        no = no->prox;
-    if (no != NULL && mesma_resistencia(no->dados.resistencia, ohms))
-        return no;
-    return NULL;
+    Elem *no = *localiza(li, ohms);
+    return e_o_no(no, ohms) ? no : NULL;
 }
 
 static int resistencia_valida(double ohms)
@@ -46,10 +75,12 @@ static int resistencia_valida(double ohms)
 static void libera_nos(Lista *li)
 {
     Elem *no;
-    while ((no = *li) != NULL) {
-        *li = no->prox;
+    while ((no = li->inicio) != NULL) {
+        li->inicio = no->prox;
         free(no);
     }
+    li->tipos = 0;
+    li->pecas = 0;
 }
 
 /* ---- criação / destruição ------------------------------------------ */
@@ -57,7 +88,12 @@ static void libera_nos(Lista *li)
 Lista *cria_lista(void)
 {
     Lista *li = malloc(sizeof(Lista));
-    if (li != NULL) *li = NULL;
+    if (li != NULL) {
+        li->inicio = NULL;
+        li->tipos = 0;
+        li->pecas = 0;
+        li->passos = 0;
+    }
     return li;
 }
 
@@ -75,62 +111,53 @@ int reinicializa_lista(Lista *li)
     return LISTA_OK;
 }
 
-/* ---- informações --------------------------------------------------- */
+/* ---- informações (O(1): lidas do descritor) ------------------------- */
 
 int tamanho_lista(Lista *li)
 {
-    int n = 0;
-    const Elem *no;
-    if (li == NULL) return 0;
-    for (no = *li; no != NULL; no = no->prox) n++;
-    return n;
+    return li == NULL ? 0 : li->tipos;
 }
 
 long long total_pecas(Lista *li)
 {
-    long long total = 0; /* int * nós não cabe em long de 32 bits */
-    const Elem *no;
-    if (li == NULL) return 0;
-    for (no = *li; no != NULL; no = no->prox) total += no->dados.quantidade;
-    return total;
+    return li == NULL ? 0 : li->pecas;
 }
 
 int lista_vazia(Lista *li)
 {
-    return li == NULL || *li == NULL;
+    return li == NULL || li->inicio == NULL;
+}
+
+int lista_passos(Lista *li)
+{
+    return li == NULL ? 0 : li->passos;
 }
 
 void percorre_lista(Lista *li, void (*f)(const Resistor *r, void *ctx), void *ctx)
 {
     const Elem *no;
     if (li == NULL || f == NULL) return;
-    for (no = *li; no != NULL; no = no->prox) f(&no->dados, ctx);
+    for (no = li->inicio; no != NULL; no = no->prox) f(&no->dados, ctx);
 }
 
 /* ---- inserção ordenada --------------------------------------------- */
 
 int insere_lista_ordenada(Lista *li, Resistor r)
 {
-    Elem *ant = NULL, *atual, *novo;
+    Elem **pp, *novo;
     if (li == NULL) return LISTA_ERRO;
     if (!resistencia_valida(r.resistencia) || r.quantidade < 0) return LISTA_INVALIDO;
 
-    /* avança até o primeiro nó com resistência >= r */
-    atual = *li;
-    while (atual != NULL && atual->dados.resistencia < r.resistencia
-           && !mesma_resistencia(atual->dados.resistencia, r.resistencia)) {
-        ant = atual;
-        atual = atual->prox;
-    }
-    if (atual != NULL && mesma_resistencia(atual->dados.resistencia, r.resistencia))
-        return LISTA_DUPLICADO;
+    pp = localiza(li, r.resistencia); /* primeiro nó com resistência >= r */
+    if (e_o_no(*pp, r.resistencia)) return LISTA_DUPLICADO;
 
     novo = malloc(sizeof(Elem));
     if (novo == NULL) return LISTA_ERRO;
     novo->dados = r;
-    novo->prox = atual;
-    if (ant == NULL) *li = novo; /* início (ou lista vazia) */
-    else ant->prox = novo;       /* meio ou fim             */
+    novo->prox = *pp; /* início, meio ou fim: o mesmo encadeamento */
+    *pp = novo;
+    li->tipos++;
+    li->pecas += r.quantidade;
     return LISTA_OK;
 }
 
@@ -138,18 +165,14 @@ int insere_lista_ordenada(Lista *li, Resistor r)
 
 int remove_lista(Lista *li, double ohms)
 {
-    Elem *ant = NULL, *no;
+    Elem **pp, *no;
     if (li == NULL) return LISTA_ERRO;
-    no = *li;
-    while (no != NULL && no->dados.resistencia < ohms
-           && !mesma_resistencia(no->dados.resistencia, ohms)) {
-        ant = no;
-        no = no->prox;
-    }
-    if (no == NULL || !mesma_resistencia(no->dados.resistencia, ohms))
-        return LISTA_NAO_ENCONTRADO;
-    if (ant == NULL) *li = no->prox;
-    else ant->prox = no->prox;
+    pp = localiza(li, ohms);
+    no = *pp;
+    if (!e_o_no(no, ohms)) return LISTA_NAO_ENCONTRADO;
+    *pp = no->prox; /* o anterior (ou o início) passa a apontar para o seguinte */
+    li->tipos--;
+    li->pecas -= no->dados.quantidade;
     free(no);
     return LISTA_OK;
 }
@@ -175,6 +198,7 @@ int retira_estoque(Lista *li, double ohms, int qtd)
     if (no == NULL) return LISTA_NAO_ENCONTRADO;
     if (qtd > no->dados.quantidade) return LISTA_SEM_ESTOQUE;
     no->dados.quantidade -= qtd; /* pode zerar: o tipo continua cadastrado */
+    li->pecas -= qtd;
     return LISTA_OK;
 }
 
@@ -187,5 +211,6 @@ int repor_estoque(Lista *li, double ohms, int qtd)
     if (no == NULL) return LISTA_NAO_ENCONTRADO;
     if (no->dados.quantidade > INT_MAX - qtd) return LISTA_INVALIDO; /* overflow */
     no->dados.quantidade += qtd;
+    li->pecas += qtd;
     return LISTA_OK;
 }

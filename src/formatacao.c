@@ -26,14 +26,21 @@ static const char *const UNIDADES[] = { "m" SIMBOLO_OHM, SIMBOLO_OHM,
 
 /* ---- parse ---------------------------------------------------------- */
 
-static double multiplicador(char c)
+/*
+ * Expoente de 10 do multiplicador `c` em *exp; 0 se `c` não é multiplicador.
+ * O valor é montado como texto "A.Be<exp>" e convertido por um único strtod
+ * (arredondamento correto): grafias do mesmo número, como "470m" e "0.47",
+ * geram exatamente o mesmo double. Multiplicar por 1e-3 não garantia isso,
+ * porque 0,001 não é exato em binário.
+ */
+static int expoente(char c, int *exp)
 {
     switch (c) {
-    case 'm':           return 1e-3;
-    case 'R': case 'r': return 1.0;
-    case 'k': case 'K': return 1e3;
-    case 'M':           return 1e6;
-    default:            return 0.0;
+    case 'm':           *exp = -3; return 1;
+    case 'R': case 'r': *exp =  0; return 1;
+    case 'k': case 'K': *exp =  3; return 1;
+    case 'M':           *exp =  6; return 1;
+    default:            return 0;
     }
 }
 
@@ -83,10 +90,12 @@ static size_t le_digitos(const char **p, char *dst, size_t cap)
 int parse_resistencia(const char *s, double *ohms)
 {
     char buf[TAM_MAX_ENTRADA];
-    char inteira[TAM_MAX_ENTRADA], fracao[TAM_MAX_ENTRADA], numero[2 * TAM_MAX_ENTRADA];
+    char inteira[TAM_MAX_ENTRADA], fracao[TAM_MAX_ENTRADA];
+    char numero[2 * TAM_MAX_ENTRADA + 8]; /* "A.Be-3" */
     const char *p;
     size_t n, na, nf = 0;
-    double mult = 1.0, valor;
+    int exp = 0;
+    double valor;
 
     if (s == NULL || ohms == NULL) return 0;
 
@@ -110,16 +119,14 @@ int parse_resistencia(const char *s, double *ohms)
         if (na == 0 && nf == 0) return 0;
         while (*p == ' ') p++;
         if (*p != '\0') {
-            mult = multiplicador(*p);
-            if (mult == 0.0) return 0;
+            if (!expoente(*p, &exp)) return 0;
             p++;
         }
     } else {
         if (na == 0) return 0;
         while (*p == ' ') p++;
         if (*p != '\0') {
-            mult = multiplicador(*p);
-            if (mult == 0.0) return 0;
+            if (!expoente(*p, &exp)) return 0;
             p++;
             nf = le_digitos(&p, fracao, sizeof fracao); /* RKM: 4k7 */
             if (nf >= sizeof fracao) return 0;
@@ -127,8 +134,8 @@ int parse_resistencia(const char *s, double *ohms)
     }
     if (*p != '\0') return 0; /* sobrou lixo: "4kk", "4k7k", "4 7" */
 
-    snprintf(numero, sizeof numero, "%s.%s", na ? inteira : "0", nf ? fracao : "0");
-    valor = strtod(numero, NULL) * mult;
+    snprintf(numero, sizeof numero, "%s.%se%d", na ? inteira : "0", nf ? fracao : "0", exp);
+    valor = strtod(numero, NULL);
 
     /* mesma faixa aceita pela lista */
     if (!(valor >= RESISTENCIA_MIN * (1 - 1e-9) && valor <= RESISTENCIA_MAX * (1 + 1e-9)))
