@@ -193,7 +193,8 @@ int decodifica_tecla(int (*proximo)(void *ctx, int bloqueia), void *ctx)
     /* ESC: só é seta se '[' ou 'O' chegar logo em seguida */
     c = proximo(ctx, 0);
     if (c == EOF) return KEY_FIM;
-    if (c != '[' && c != 'O') return KEY_IGNORADA; /* ESC isolado ou Alt+tecla */
+    if (c == TECLA_TIMEOUT) return KEY_ESC;        /* Esc sozinho        */
+    if (c != '[' && c != 'O') return KEY_IGNORADA; /* Alt+tecla          */
     c = proximo(ctx, 0);
     if (c == EOF) return KEY_FIM;
     if (c == 'A') return KEY_UP;
@@ -276,6 +277,7 @@ static int ler_tecla(void)
         if (c2 == 77) return KEY_RIGHT;
         return KEY_IGNORADA;
     }
+    if (c == TECLA_ESC) return KEY_ESC;
     return c;
 #else
     struct termios raw_t;
@@ -347,6 +349,20 @@ int navegar_menu(int selecao, int tecla)
     return col == 0 ? row + 1 : row + 5;
 }
 
+int menu_tecla_opcao(int tecla, int selecao)
+{
+    /* Esc ou fim da entrada (EOF, Ctrl+D, terminal fechado) encerram como Sair */
+    if (tecla == KEY_ESC || tecla == KEY_FIM) return OPCAO_SAIR;
+
+    /* Acesso rápido por dígito */
+    if (tecla >= '0' && tecla < '0' + OPCAO_TOTAL) return tecla - '0';
+
+    /* Enter confirma seleção atual */
+    if (tecla == '\r' || tecla == '\n') return selecao;
+
+    return MENU_CONTINUA;
+}
+
 void desenha_menu(const Lista *li, int selecao)
 {
     static const char *const ROTULOS[OPCAO_TOTAL] = {
@@ -399,7 +415,8 @@ void desenha_menu(const Lista *li, int selecao)
     {
         const char *dica =
             "\xe2\x86\x91\xe2\x86\x93\xe2\x86\x90\xe2\x86\x92"
-            "/WASD Navegar  \xc2\xb7  [0-8] Acesso r\xc3\xa1pido  \xc2\xb7  [Enter] Confirmar";
+            "/WASD Navegar \xc2\xb7 [0-8] Acesso r\xc3\xa1pido \xc2\xb7 [Enter] Confirmar"
+            " \xc2\xb7 [Esc] Sair";
         int esq = (cols - (int)ui_largura(dica)) / 2;
         if (esq < 0) esq = 0;
         printf("%*s%s%s%s\n", esq, "", dim, dica, rs);
@@ -438,7 +455,7 @@ int tela_menu(const Lista *li)
     protege_terminal();
     mostra_cursor(0); /* esconde cursor piscante durante navegação */
     for (;;) {
-        int c, pad, i;
+        int c, op, pad, i;
         ui_limpar_tela();
 
         /* Centralização vertical: pad linhas em branco acima do menu */
@@ -449,14 +466,9 @@ int tela_menu(const Lista *li)
 
         c = ler_tecla();
 
-        /* Fim da entrada (EOF, Ctrl+D, terminal fechado) encerra como Sair */
-        if (c == KEY_FIM) { mostra_cursor(1); return OPCAO_SAIR; }
-
-        /* Acesso rápido por dígito */
-        if (c >= '0' && c <= '8') { mostra_cursor(1); return c - '0'; }
-
-        /* Enter confirma seleção atual */
-        if (c == '\r' || c == '\n') { mostra_cursor(1); return selecao; }
+        /* Esc, EOF, dígito ou Enter encerram o menu com uma opção */
+        op = menu_tecla_opcao(c, selecao);
+        if (op != MENU_CONTINUA) { mostra_cursor(1); return op; }
 
         selecao = navegar_menu(selecao, c);
     }
