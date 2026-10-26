@@ -64,6 +64,30 @@ static void teste_parse_limites(void)
     ASSERT_EQ_DBL(RESISTENCIA_MAX, parse_ok("1000M"), 1e-12);
 }
 
+/* Grafias do mesmo valor geram EXATAMENTE o mesmo double (chave canônica) */
+static void mesma_chave(const char *a, const char *b)
+{
+    double va = parse_ok(a), vb = parse_ok(b);
+    tf_asserts++;
+    if (va != vb) TF_FALHA("\"%s\" (%.17g) != \"%s\" (%.17g)", a, va, b, vb);
+}
+
+static void teste_parse_chave_canonica(void)
+{
+    char buf[32];
+    mesma_chave("470m", "0.47");
+    mesma_chave("470m", "0,47");
+    mesma_chave("4k7", "4.7k");
+    mesma_chave("4k7", "4700");
+    mesma_chave("1M5", "1500000");
+    mesma_chave("2m2", "0.0022");
+    mesma_chave("4R7", "4.7");
+    mesma_chave("1m", "0.001");
+    /* sem perda de precisão: frações de mΩ continuam valendo */
+    formata_resistencia(parse_ok("470.5m"), buf, sizeof buf);
+    ASSERT_STR_EQ("470,5 m" OHM, buf);
+}
+
 /* ---- parse: entradas inválidas -------------------------------------- */
 
 static void parse_falha(const char *s)
@@ -172,6 +196,7 @@ int main(void)
     RUN_TEST(teste_parse_notacao_rkm);
     RUN_TEST(teste_parse_espacos_e_sufixo);
     RUN_TEST(teste_parse_limites);
+    RUN_TEST(teste_parse_chave_canonica);
     RUN_TEST(teste_parse_invalidos);
     RUN_TEST(teste_formata_grandezas);
     RUN_TEST(teste_formata_casas_decimais);

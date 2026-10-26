@@ -45,18 +45,18 @@ int decodifica_tecla(int (*proximo)(void *ctx, int bloqueia), void *ctx);
 int navegar_menu(int selecao, int tecla);
 
 /* Redesenha o menu com a opção `selecao` destacada */
-void desenha_menu(Lista *li, int selecao);
+void desenha_menu(const Lista *li, int selecao);
 
 void tela_boas_vindas(void);
-int  tela_menu(Lista *li); /* devolve OPCAO_*; EOF devolve OPCAO_SAIR */
+int  tela_menu(const Lista *li); /* devolve OPCAO_*; EOF devolve OPCAO_SAIR */
 void tela_inserir(Lista *li);
 void tela_remover(Lista *li);
-void tela_listar(Lista *li);
+void tela_listar(const Lista *li);
 void tela_consultar(Lista *li);
 void tela_retirar(Lista *li);
 void tela_repor(Lista *li);
 void tela_reinicializar(Lista *li);
 void tela_diferencial(void);
-void tela_encerramento(Lista *li);
+void tela_encerramento(const Lista *li);
 
 #endif /* TELAS_H */

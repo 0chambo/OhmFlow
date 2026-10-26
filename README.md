@@ -56,9 +56,11 @@ Os dados ficam **somente na memória RAM**, em uma **lista simplesmente encadead
 
 Cada nó guarda um resistor e o ponteiro para o próximo. A lista é mantida **sempre em ordem crescente de resistência**, porque a inserção já coloca o nó na posição certa. Nada é reorganizado depois.
 
+A lista tem um **nó descritor**: uma estrutura à parte que guarda o ponteiro para o primeiro nó e os totais de tipos e de peças. Os totais são atualizados a cada inserção, remoção, retirada ou reposição, então `tamanho_lista` e `total_pecas` respondem em O(1), sem percorrer a lista.
+
 ```mermaid
 flowchart LR
-    LI["Lista* li"] --> A["220 Ω<br/>qtd 5"]
+    LI["Lista* li<br/>(descritor)<br/>tipos 3 · peças 20"] -- inicio --> A["220 Ω<br/>qtd 5"]
     A --> B["4,7 kΩ<br/>qtd 12"]
     B --> C["10 kΩ<br/>qtd 3"]
     C --> N["NULL"]
@@ -71,13 +73,38 @@ struct elemento {
     Resistor         dados;  /* resistência em Ω (chave) e quantidade */
     struct elemento *prox;   /* próximo nó, ou NULL no último         */
 };
+
+struct descritor {           /* "Lista" (opaca para quem usa lista.h)  */
+    struct elemento *inicio; /* primeiro nó, ou NULL se vazia          */
+    int       tipos;         /* quantidade de nós                      */
+    long long pecas;         /* soma das quantidades                   */
+    int       passos;        /* nós examinados pela última busca       */
+};
 ```
 
 Todas as funções abaixo ficam em [src/lista.c](src/lista.c) e devolvem um código de retorno (`LISTA_OK`, `LISTA_DUPLICADO`, `LISTA_NAO_ENCONTRADO`, `LISTA_SEM_ESTOQUE`, `LISTA_INVALIDO` ou `LISTA_ERRO`), que a interface transforma em mensagem para o usuário.
 
+### Busca: `localiza` (ponteiro para ponteiro)
+
+Todas as operações começam pela mesma função interna, `localiza(li, ohms)`. Ela percorre a lista e **para no primeiro nó com resistência maior ou igual** à procurada; graças à ordenação, não precisa ir até o fim. Em vez do nó, devolve o **endereço do ponteiro** que aponta para ele (`Elem **pp`): o campo `inicio` do descritor ou o `prox` do nó anterior. Assim, inserir ou remover no início, no meio ou no fim da lista é o mesmo código, sem ponteiro `ant` nem caso especial para o primeiro nó.
+
+`localiza` também conta os nós examinados. O total fica disponível em `lista_passos(li)`, e a tela **Consultar** mostra o resultado:
+
+```text
+  4,7 kΩ → 12 unidades
+  Busca: 2 nós visitados
+```
+
+| Lista `220 Ω → 4,7 kΩ → 10 kΩ`, procurando | Nós visitados | Por quê |
+| --- | --- | --- |
+| 100 Ω | 1 | o primeiro nó já é maior: para ali |
+| 4,7 kΩ | 2 | achou no segundo |
+| 5 kΩ | 3 | para em 10 kΩ, que é maior |
+| 1 MΩ | 3 | chega ao fim da lista |
+
 ### Inserir um resistor
 
-`insere_lista_ordenada` percorre a lista até o primeiro nó com resistência maior ou igual à nova. Se for igual, recusa (duplicado). Senão, cria o nó e ajusta **só dois ponteiros**, sem deslocar nenhum outro elemento.
+`insere_lista_ordenada` usa `localiza` para chegar ao primeiro nó com resistência maior ou igual à nova. Se for igual, recusa (duplicado). Senão, cria o nó e ajusta **só dois ponteiros**, sem deslocar nenhum outro elemento.
 
 ```mermaid
 flowchart TD
@@ -85,21 +112,15 @@ flowchart TD
     L -- sim --> E0(["LISTA_ERRO"])
     L -- não --> V{"Resistência entre 1 mΩ e 1000 MΩ<br/>e quantidade >= 0?"}
     V -- não --> E1(["LISTA_INVALIDO"])
-    V -- sim --> I["ant = NULL<br/>atual = início da lista"]
-    I --> W{"atual existe e<br/>atual.resistencia < r.resistencia?"}
-    W -- sim --> AV["ant = atual<br/>atual = atual.prox"]
-    AV --> W
-    W -- não --> D{"atual existe e tem a<br/>mesma resistência de r?"}
+    V -- sim --> I["pp = localiza(li, r.resistencia)<br/>*pp = primeiro nó >= r, ou NULL"]
+    I --> D{"*pp existe e tem a<br/>mesma resistência de r?"}
     D -- sim --> E2(["LISTA_DUPLICADO"])
     D -- não --> M["novo = malloc de um nó"]
     M --> MF{"malloc falhou?"}
     MF -- sim --> E3(["LISTA_ERRO"])
-    MF -- não --> P["novo.dados = r<br/>novo.prox = atual"]
-    P --> Q{"ant é NULL?"}
-    Q -- sim --> H["início da lista = novo"]
-    Q -- não --> T["ant.prox = novo"]
-    H --> OK(["LISTA_OK"])
-    T --> OK
+    MF -- não --> P["novo.dados = r<br/>novo.prox = *pp<br/>*pp = novo"]
+    P --> C["tipos += 1<br/>peças += r.quantidade"]
+    C --> OK(["LISTA_OK"])
 ```
 
 Exemplo: inserir **5 kΩ** em `220 Ω → 4,7 kΩ → 10 kΩ`.
@@ -117,36 +138,31 @@ flowchart LR
     antes --> depois
 ```
 
-O percurso para em `10 kΩ` (primeiro nó que não é menor que 5 kΩ), com `ant = 4,7 kΩ`. O novo nó aponta para `10 kΩ` e o `4,7 kΩ` passa a apontar para o novo nó.
+O percurso para em `10 kΩ` (primeiro nó que não é menor que 5 kΩ), e `pp` é o endereço do campo `prox` do `4,7 kΩ`. O novo nó aponta para `10 kΩ` e, ao escrever `*pp = novo`, o `4,7 kΩ` passa a apontar para o novo nó.
 
-Casos de borda:
+Casos de borda (todos resolvidos pelas mesmas duas linhas `novo->prox = *pp; *pp = novo;`):
 
 | Caso | O que acontece |
 | --- | --- |
-| Menor que todos (ex.: 100 Ω) | `ant` fica NULL, então o novo nó vira o início da lista |
-| Maior que todos (ex.: 1 MΩ) | `atual` chega em NULL, então o novo nó vira o último |
+| Menor que todos (ex.: 100 Ω) | `pp` é o endereço de `inicio` no descritor, então o novo nó vira o início da lista |
+| Maior que todos (ex.: 1 MΩ) | `*pp` é o `prox` NULL do último nó, então o novo nó vira o último |
 | Resistência já cadastrada | nada é inserido, retorna `LISTA_DUPLICADO` |
 | Fora da faixa ou quantidade negativa | retorna `LISTA_INVALIDO` |
 
 ### Remover um resistor
 
-`remove_lista` procura o nó pela resistência, mantendo o ponteiro `ant` do nó anterior. Depois religa o anterior ao seguinte e libera o nó com `free`. A busca **para cedo** quando passa do valor procurado, graças à ordenação.
+`remove_lista` usa `localiza` para obter o endereço do ponteiro que aponta para o nó. Basta trocar esse ponteiro para o nó seguinte e liberar o nó com `free`. A busca **para cedo** quando passa do valor procurado, graças à ordenação.
 
 ```mermaid
 flowchart TD
     S(["remove_lista(li, ohms)"]) --> L{"li é NULL?"}
     L -- sim --> E0(["LISTA_ERRO"])
-    L -- não --> I["ant = NULL<br/>no = início da lista"]
-    I --> W{"no existe e<br/>no.resistencia < ohms?"}
-    W -- sim --> AV["ant = no<br/>no = no.prox"]
-    AV --> W
-    W -- não --> F{"no existe e tem a<br/>mesma resistência de ohms?"}
+    L -- não --> I["pp = localiza(li, ohms)<br/>no = *pp"]
+    I --> F{"no existe e tem a<br/>mesma resistência de ohms?"}
     F -- não --> E1(["LISTA_NAO_ENCONTRADO"])
-    F -- sim --> Q{"ant é NULL?"}
-    Q -- sim --> H["início da lista = no.prox"]
-    Q -- não --> T["ant.prox = no.prox"]
-    H --> FR["free(no)"]
-    T --> FR
+    F -- sim --> T["*pp = no.prox"]
+    T --> C["tipos -= 1<br/>peças -= no.quantidade"]
+    C --> FR["free(no)"]
     FR --> OK(["LISTA_OK"])
 ```
 
@@ -165,19 +181,19 @@ flowchart LR
     antes --> depois
 ```
 
-O percurso para em `4,7 kΩ` (primeiro nó que não é menor que o procurado), com `ant = 220 Ω`. O `220 Ω` passa a apontar direto para o `10 kΩ` e o nó removido é liberado com `free`.
+O percurso para em `4,7 kΩ` (primeiro nó que não é menor que o procurado), e `pp` é o endereço do campo `prox` do `220 Ω`. Com `*pp = no->prox`, o `220 Ω` passa a apontar direto para o `10 kΩ`, e o nó removido é liberado com `free`.
 
 Casos de borda:
 
 | Caso | O que acontece |
 | --- | --- |
-| Remover o primeiro nó (ex.: 220 Ω) | `ant` é NULL, então o início da lista passa a ser o segundo nó |
-| Remover o último nó (ex.: 10 kΩ) | o penúltimo nó passa a apontar para NULL |
+| Remover o primeiro nó (ex.: 220 Ω) | `pp` é o endereço de `inicio` no descritor, então o início da lista passa a ser o segundo nó |
+| Remover o último nó (ex.: 10 kΩ) | o `prox` do penúltimo nó recebe o `prox` NULL do último |
 | Resistência não cadastrada | nada muda, retorna `LISTA_NAO_ENCONTRADO` |
 
 ### Editar o estoque (Retirar e Repor)
 
-O programa não tem uma função de "editar resistência". O que se altera é a **quantidade** de um tipo já cadastrado, por Retirar (baixa) e Repor (soma). As duas usam a mesma busca ordenada (`busca`) para achar o nó e mexem só no campo `quantidade`: a lista não muda de forma e a ordem é preservada.
+O programa não tem uma função de "editar resistência". O que se altera é a **quantidade** de um tipo já cadastrado, por Retirar (baixa) e Repor (soma). As duas usam a mesma busca ordenada (`localiza`) para achar o nó e mexem só no campo `quantidade` (e no total de peças do descritor): a lista não muda de forma e a ordem é preservada.
 
 ```mermaid
 flowchart TD
@@ -185,16 +201,16 @@ flowchart TD
     L -- sim --> E0(["LISTA_ERRO"])
     L -- não --> Q{"qtd <= 0?"}
     Q -- sim --> E1(["LISTA_INVALIDO"])
-    Q -- não --> B["no = busca(li, ohms)<br/>percorre em ordem e para ao passar de ohms"]
+    Q -- não --> B["no = *localiza(li, ohms)<br/>percorre em ordem e para ao passar de ohms"]
     B --> F{"no encontrado?"}
     F -- não --> E2(["LISTA_NAO_ENCONTRADO"])
     F -- sim --> T{"Operação"}
     T -- Retirar --> R1{"qtd > no.quantidade?"}
     R1 -- sim --> E3(["LISTA_SEM_ESTOQUE"])
-    R1 -- não --> R2["no.quantidade -= qtd"]
+    R1 -- não --> R2["no.quantidade -= qtd<br/>peças -= qtd"]
     T -- Repor --> P1{"no.quantidade + qtd<br/>estoura o limite de int?"}
     P1 -- sim --> E4(["LISTA_INVALIDO"])
-    P1 -- não --> P2["no.quantidade += qtd"]
+    P1 -- não --> P2["no.quantidade += qtd<br/>peças += qtd"]
     R2 --> OK(["LISTA_OK"])
     P2 --> OK
 ```
@@ -232,7 +248,7 @@ flowchart LR
 Detalhes:
 
 - **Retirar até zerar** é permitido: o tipo continua cadastrado com quantidade 0. Para apagá-lo de vez, use Remover.
-- **Consultar** (`consulta_lista`) usa a mesma busca, só lê a quantidade e não altera nada.
+- **Consultar** (`consulta_lista`) usa a mesma busca, só lê a quantidade e não altera nada. A tela mostra também quantos nós a busca visitou (`lista_passos`).
 - Para **trocar o valor de uma resistência** cadastrada errada, remova o tipo e insira de novo com o valor certo. A chave de ordenação nunca é alterada no lugar.
 
 ### Outras operações
@@ -240,8 +256,13 @@ Detalhes:
 | Função | Como funciona |
 | --- | --- |
 | Listar | `percorre_lista` visita cada nó do início ao fim, já em ordem crescente |
-| Reinicializar | `reinicializa_lista` dá `free` em todos os nós e deixa a lista vazia (`NULL`) |
-| Sair | `libera_lista` libera todos os nós e a própria cabeça da lista |
+| Tipos e peças (menu, Listar, encerramento) | `tamanho_lista` e `total_pecas` leem os totais do descritor, em O(1) |
+| Reinicializar | `reinicializa_lista` dá `free` em todos os nós, deixa `inicio` em `NULL` e zera os totais |
+| Sair | `libera_lista` libera todos os nós e o próprio descritor |
+
+### Chave de ordenação exata
+
+O texto digitado é convertido para Ω por um único `strtod` sobre a forma decimal com expoente (`"470m"` vira `"470.0e-3"`). Assim, grafias diferentes do mesmo valor (`470m`, `0.47`, `0,47`) geram exatamente o mesmo `double`. Multiplicar por `0,001` não garantia isso, porque esse número não é exato em binário. A comparação com tolerância (`mesma_resistencia`) continua como rede de segurança.
 
 ## Instalação dos pré-requisitos
 

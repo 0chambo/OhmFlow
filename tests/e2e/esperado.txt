@@ -17,6 +17,7 @@ Retirada concluída
 4,7 kΩ: 10 → 7 unidades
 
 4,7 kΩ → 7 unidades
+Busca: 3 nós visitados
 
 Estoque insuficiente
 4,7 kΩ tem 7, pedido 100

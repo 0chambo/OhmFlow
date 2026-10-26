@@ -279,6 +279,70 @@ static void teste_reinicializa(void)
     libera_lista(li);
 }
 
+/* ---- contadores do descritor --------------------------------------- */
+
+/* tipos/peças do descritor batem com uma recontagem nó a nó */
+static void confere_contadores(Lista *li)
+{
+    Coleta c = coleta(li);
+    long long soma = 0;
+    int i;
+    for (i = 0; i < c.n; i++) soma += c.itens[i].quantidade;
+    ASSERT_EQ_INT(c.n, tamanho_lista(li));
+    ASSERT_EQ_INT(soma, total_pecas(li));
+    ASSERT_EQ_INT(c.n == 0, lista_vazia(li));
+    ASSERT_TRUE(ordenada(li));
+}
+
+static void teste_contadores_invariantes(void)
+{
+    Lista *li = cria_lista();
+    confere_contadores(li);
+    insere_lista_ordenada(li, R(1000, 10));   confere_contadores(li); /* vazia   */
+    insere_lista_ordenada(li, R(10, 5));      confere_contadores(li); /* início  */
+    insere_lista_ordenada(li, R(1e6, 7));     confere_contadores(li); /* fim     */
+    insere_lista_ordenada(li, R(470, 3));     confere_contadores(li); /* meio    */
+    insere_lista_ordenada(li, R(470, 99));    confere_contadores(li); /* dup.    */
+    insere_lista_ordenada(li, R(-1, 99));     confere_contadores(li); /* inválido*/
+    retira_estoque(li, 1000, 4);              confere_contadores(li);
+    retira_estoque(li, 1000, 999);            confere_contadores(li); /* sem est.*/
+    repor_estoque(li, 470, 20);               confere_contadores(li);
+    remove_lista(li, 10);                     confere_contadores(li); /* primeiro*/
+    remove_lista(li, 470);                    confere_contadores(li); /* meio    */
+    remove_lista(li, 1e6);                    confere_contadores(li); /* último  */
+    remove_lista(li, 5);                      confere_contadores(li); /* inexist.*/
+    ASSERT_EQ_INT(1, tamanho_lista(li));
+    ASSERT_EQ_INT(6, total_pecas(li));
+    insere_lista_ordenada(li, R(22, 1));
+    reinicializa_lista(li);                   confere_contadores(li);
+    ASSERT_EQ_INT(0, total_pecas(li));
+    libera_lista(li);
+}
+
+/* ---- passos da busca (parada antecipada) --------------------------- */
+
+static void teste_passos_busca(void)
+{
+    Lista *li = cria_lista();
+    consulta_lista(li, 220, NULL);
+    ASSERT_EQ_INT(0, lista_passos(li));           /* vazia: nada a visitar  */
+    libera_lista(li);
+
+    li = lista_padrao();                          /* 220 -> 4,7k -> 1M      */
+    consulta_lista(li, 100, NULL);
+    ASSERT_EQ_INT(1, lista_passos(li));           /* antes do primeiro      */
+    consulta_lista(li, 220, NULL);
+    ASSERT_EQ_INT(1, lista_passos(li));
+    consulta_lista(li, 330, NULL);
+    ASSERT_EQ_INT(2, lista_passos(li));           /* para em 4,7k           */
+    consulta_lista(li, 4700, NULL);
+    ASSERT_EQ_INT(2, lista_passos(li));
+    consulta_lista(li, 2e6, NULL);
+    ASSERT_EQ_INT(3, lista_passos(li));           /* depois do último       */
+    ASSERT_EQ_INT(0, lista_passos(NULL));
+    libera_lista(li);
+}
+
 /* ---- robustez: lista NULL ------------------------------------------ */
 
 static void conta_cb(const Resistor *r, void *ctx)
@@ -331,6 +395,8 @@ int main(void)
     RUN_TEST(teste_repor_overflow);
     RUN_TEST(teste_total_pecas_sem_overflow);
     RUN_TEST(teste_reinicializa);
+    RUN_TEST(teste_contadores_invariantes);
+    RUN_TEST(teste_passos_busca);
     RUN_TEST(teste_lista_nula);
     RUN_TEST(teste_mesma_resistencia);
     return tf_resumo("test_lista");
