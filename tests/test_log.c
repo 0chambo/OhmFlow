@@ -201,6 +201,87 @@ static void teste_sem_iniciar_e_noop(void)
     ASSERT_TRUE(!log_ativo());
 }
 
+/* ---- leitura (tela Histórico) ----------------------------------------- */
+
+static void teste_parse_linha_de_acao(void)
+{
+    char linha[256], data[32];
+    LogEntrada e;
+    time_t t = (time_t)1800000000;
+    log_formata_linha(linha, sizeof linha, t, LOG_AVISO, "RETIRAR", "4,7 k\xCE\xA9",
+                      "-100 (tem 7)", "SEM ESTOQUE");
+    ASSERT_EQ_INT(1, log_parse_linha(linha, &e));
+    data_log(t, data, sizeof data);
+    ASSERT_STR_EQ(data, e.data);
+    ASSERT_STR_EQ("AVISO", e.nivel);
+    ASSERT_STR_EQ("RETIRAR", e.acao);
+    ASSERT_STR_EQ("4,7 k\xCE\xA9", e.alvo);
+    ASSERT_STR_EQ("-100 (tem 7)", e.detalhe);
+    ASSERT_STR_EQ("SEM ESTOQUE", e.resultado);
+}
+
+static void teste_parse_ignora_o_que_nao_e_acao(void)
+{
+    LogEntrada e;
+    ASSERT_EQ_INT(0, log_parse_linha("================================================", &e));
+    ASSERT_EQ_INT(0, log_parse_linha(" OhmFlow \xE2\x80\x94 sess\xC3\xA3o iniciada em 1", &e));
+    ASSERT_EQ_INT(0, log_parse_linha("", &e));
+    ASSERT_EQ_INT(0, log_parse_linha("abc | def", &e));
+    ASSERT_EQ_INT(0, log_parse_linha(NULL, &e));
+}
+
+static void teste_ultimas_acoes_em_ordem(void)
+{
+    LogEntrada v[2];
+    prepara_sessao();
+    ASSERT_EQ_INT(1, log_iniciar());
+    log_acao(LOG_INFO, "A1", NULL, NULL, "OK");
+    agora_falso += 1;
+    log_acao(LOG_INFO, "A2", NULL, NULL, "OK");
+    agora_falso += 1;
+    log_acao(LOG_ERRO, "A3", NULL, NULL, "FALHA");
+    log_encerrar();
+
+    ASSERT_EQ_INT(2, log_ultimas(v, 2)); /* só as 2 mais recentes */
+    ASSERT_STR_EQ("A2", v[0].acao);       /* em ordem cronológica  */
+    ASSERT_STR_EQ("A3", v[1].acao);
+    ASSERT_STR_EQ("ERRO", v[1].nivel);
+    ASSERT_EQ_INT(0, log_ultimas(v, 0));
+}
+
+static void teste_ultimas_junta_dias(void)
+{
+    char caminho[512];
+    LogEntrada v[10];
+    time_t hoje = (time_t)1800000000;
+
+    log_definir_relogio(relogio_falso);
+    log_definir_pasta(PASTA_TESTE);
+    agora_falso = hoje - 86400; /* ontem */
+    if (log_caminho_do_dia(caminho, sizeof caminho)) remove(caminho);
+    ASSERT_EQ_INT(1, log_iniciar());
+    log_acao(LOG_INFO, "ONTEM", NULL, NULL, "OK");
+    log_encerrar();
+
+    agora_falso = hoje;
+    if (log_caminho_do_dia(caminho, sizeof caminho)) remove(caminho);
+    ASSERT_EQ_INT(1, log_iniciar());
+    log_acao(LOG_INFO, "HOJE", NULL, NULL, "OK");
+    log_encerrar();
+
+    ASSERT_EQ_INT(2, log_ultimas(v, 10));
+    ASSERT_STR_EQ("ONTEM", v[0].acao);
+    ASSERT_STR_EQ("HOJE", v[1].acao);
+}
+
+static void teste_ultimas_sem_arquivos(void)
+{
+    LogEntrada v[4];
+    log_definir_relogio(relogio_falso);
+    log_definir_pasta("build/test_log_tmp/nao_existe");
+    ASSERT_EQ_INT(0, log_ultimas(v, 4));
+}
+
 int main(void)
 {
     puts("test_log");
@@ -215,6 +296,11 @@ int main(void)
     RUN_TEST(teste_segunda_sessao_anexa);
     RUN_TEST(teste_pasta_invalida_nao_quebra);
     RUN_TEST(teste_sem_iniciar_e_noop);
+    RUN_TEST(teste_parse_linha_de_acao);
+    RUN_TEST(teste_parse_ignora_o_que_nao_e_acao);
+    RUN_TEST(teste_ultimas_acoes_em_ordem);
+    RUN_TEST(teste_ultimas_junta_dias);
+    RUN_TEST(teste_ultimas_sem_arquivos);
     log_definir_pasta(NULL);
     log_definir_relogio(NULL);
     return tf_resumo("log");

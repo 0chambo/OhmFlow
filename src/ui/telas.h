@@ -1,17 +1,17 @@
 /*
  * telas.h — telas do OhmFlow, na ordem do roteiro de navegação:
  *   [1] boas-vindas -> [2] menu -> [3] tela da função -> [4] feedback -> [2] ...
- *   [0] sair -> [5] encerramento
+ *   Esc ou tecla 0 no menu -> [5] encerramento
  */
 #ifndef TELAS_H
 #define TELAS_H
 
 #include "lista.h"
 
-/* Opções do menu principal */
+/* Opções do menu principal. [9] Histórico ocupa a linha de baixo, onde
+ * ficava o antigo "[0] Sair" */
 enum {
-    OPCAO_SAIR = 0,
-    OPCAO_INSERIR,
+    OPCAO_INSERIR = 1,
     OPCAO_REMOVER,
     OPCAO_LISTAR,
     OPCAO_CONSULTAR,
@@ -19,8 +19,12 @@ enum {
     OPCAO_REPOR,
     OPCAO_REINICIALIZAR,
     OPCAO_DIFERENCIAL,
+    OPCAO_HISTORICO,
     OPCAO_TOTAL
 };
+
+/* Sair não é item do menu: Esc, tecla 0 ou fim da entrada */
+#define OPCAO_SAIR (-2)
 
 /* Teclas de navegação para navegar_menu() */
 #define KEY_UP    256
@@ -45,11 +49,11 @@ enum {
  */
 int decodifica_tecla(int (*proximo)(void *ctx, int bloqueia), void *ctx);
 
-/* Retorna nova seleção (0-8) dado a seleção atual e uma tecla KEY_* */
+/* Retorna nova seleção (1-9) dado a seleção atual e uma tecla KEY_* */
 int navegar_menu(int selecao, int tecla);
 
-/* Opção escolhida pela tecla no menu (Esc/EOF -> OPCAO_SAIR, dígito, Enter
- * na `selecao`) ou MENU_CONTINUA se a tecla só navega ou é ignorada */
+/* Opção escolhida pela tecla no menu (Esc/0/EOF -> OPCAO_SAIR, dígito 1-9,
+ * Enter na `selecao`) ou MENU_CONTINUA se a tecla só navega ou é ignorada */
 int menu_tecla_opcao(int tecla, int selecao);
 
 /* Redesenha o menu com a opção `selecao` destacada */
@@ -74,6 +78,7 @@ void tela_retirar(Lista *li);
 void tela_repor(Lista *li);
 void tela_reinicializar(Lista *li);
 void tela_diferencial(void);
+void tela_historico(void); /* últimas ações lidas dos logs */
 void tela_encerramento(const Lista *li);
 
 #endif /* TELAS_H */

@@ -43,6 +43,29 @@ size_t log_formata_linha(char *buf, size_t n, time_t t, int nivel, const char *a
 /* Caminho do arquivo do dia para a pasta e o relógio atuais; 0 se não couber */
 int  log_caminho_do_dia(char *buf, size_t n);
 
+/* ---- leitura (tela Histórico) ---- */
+
+/* Quantos dias para trás log_ultimas procura arquivos */
+#define LOG_DIAS_HISTORICO 30
+
+/* Uma linha de ação lida de volta do arquivo, campo a campo (sem o preenchimento) */
+typedef struct {
+    char data[24];      /* "27/10/2026 14:03:20" */
+    char nivel[8];      /* INFO, AVISO ou ERRO   */
+    char acao[24];
+    char alvo[64];
+    char detalhe[64];
+    char resultado[64];
+} LogEntrada;
+
+/* 1 se `linha` é uma linha de ação (6 colunas, começa com data) e preenche *e;
+ * 0 para cabeçalho, rodapé, linha vazia ou qualquer outra coisa */
+int  log_parse_linha(const char *linha, LogEntrada *e);
+
+/* Lê os arquivos dos últimos LOG_DIAS_HISTORICO dias e guarda em v as `max`
+ * ações mais recentes, em ordem cronológica; devolve quantas guardou */
+int  log_ultimas(LogEntrada *v, int max);
+
 /* Para testes: força a pasta (NULL volta ao padrão) e o relógio (NULL = time) */
 void log_definir_pasta(const char *pasta);
 void log_definir_relogio(time_t (*agora)(void));
