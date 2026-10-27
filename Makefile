@@ -6,7 +6,7 @@
 #   make asan       testes + e2e com ASan/UBSan (nao roda no MinGW; fora do CI)
 #   make cppcheck   análise estática
 #   make clean      remove build/ e dist/
-#   make icone      regenera src/assets/ohmflow.ico a partir do logo (Windows, Pillow)
+#   make icone      regenera src/assets/logo/ohmflow.ico a partir do logo (Windows, Pillow)
 #   make setup      gera dist/ohm_flow_setup.exe (Windows, Inno Setup 6) [VERSAO=x.y.z]
 #   make teste-setup  instala o setup em silencio, roda o programa e desinstala
 
@@ -25,7 +25,7 @@ VERSAO_NUM   = $(subst .,$(virgula),$(firstword $(subst -, ,$(VERSAO)))),0
 ifeq ($(OS),Windows_NT)
   EXE     = .exe
   WINDRES = windres
-  ICO     = src/assets/ohmflow.ico
+  ICO     = src/assets/logo/ohmflow.ico
   RES_OBJ = $(BUILD)/ohmflow_res.o
   # Subsistema console (CUI): cmd/PowerShell esperam o programa terminar (issue #11)
   CHECA_SUBSISTEMA = objdump -p $(BIN) | grep -q '(Windows CUI)' \
@@ -66,12 +66,12 @@ $(BUILD):
 # O .ico é versionado: só é gerado (Python + Pillow) se estiver faltando, para
 # um checkout limpo não depender da data de logo.png. Para regenerar após
 # trocar o logo: make icone
-GERA_ICO = python -c "from PIL import Image; img=Image.open('src/assets/logo.png').convert('RGBA'); img.save('$(ICO)', format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+GERA_ICO = python -c "from PIL import Image; img=Image.open('src/assets/logo/logo.png').convert('RGBA'); img.save('$(ICO)', format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])"
 
-$(ICO): | src/assets/logo.png
+$(ICO): | src/assets/logo/logo.png
 	$(GERA_ICO)
 
-icone: src/assets/logo.png
+icone: src/assets/logo/logo.png
 	$(GERA_ICO)
 
 $(RES_OBJ): src/assets/ohmflow.rc $(ICO) | $(BUILD)

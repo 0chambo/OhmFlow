@@ -30,7 +30,7 @@ AppUpdatesURL=https://github.com/Grolla05/OhmFlow/releases
 SourceDir=..
 OutputDir=dist
 OutputBaseFilename=ohm_flow_setup
-SetupIconFile=src\assets\ohmflow.ico
+SetupIconFile=src\assets\logo/ohmflow.ico
 LicenseFile=LICENSE
 ; Sem admin por padrão (%LOCALAPPDATA%\Programs\OhmFlow); o diálogo inicial
 ; permite instalar para todos os usuários (Arquivos de Programas)

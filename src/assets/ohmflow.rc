@@ -1,5 +1,5 @@
 /* ohmflow.rc — recursos do executável Windows */
-1 ICON "src/assets/ohmflow.ico"
+1 ICON "src/assets/logo/ohmflow.ico"
 
 /* Versão mostrada em Propriedades > Detalhes. O Makefile passa
  * -DVERSAO=1.0.0 e -DVERSAO_NUM=1,0,0,0 (padrões abaixo para builds avulsos). */

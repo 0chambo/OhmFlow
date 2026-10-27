@@ -491,7 +491,7 @@ make clean; make EXTRA_CFLAGS=-Werror all test e2e cppcheck
 
 O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push ou pull request em `main` e `Grolla`, num único job **Windows** (`windows-latest`, MSYS2 UCRT64): `make all test e2e` com `-Werror`, a checagem de subsistema console, `make cppcheck` e `make teste-setup` (instalador gerado e testado).
 
-O ícone `src/assets/ohmflow.ico` é versionado, então o build não precisa de Python. Se trocar o `logo.png`, regenere o ícone com `make icone` (requer Python com Pillow) e faça commit do `.ico`.
+O ícone `src/assets/logo/ohmflow.ico` é versionado, então o build não precisa de Python. Se trocar o `logo.png`, regenere o ícone com `make icone` (requer Python com Pillow) e faça commit do `.ico`.
 
 ## Referência
 
