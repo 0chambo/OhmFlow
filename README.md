@@ -38,7 +38,8 @@ O programa depende só de DLLs que já vêm no Windows 10/11 (`KERNEL32`, `USER3
 | 6 | Repor | soma uma quantidade ao estoque |
 | 7 | Inicializar/Reinicializar | esvazia a lista, com aviso e confirmação |
 | 8 | Diferencial | a definir |
-| 0 | Sair | encerra o programa e libera a memória |
+| 9 | Histórico | últimas 15 ações (dos logs dos últimos 30 dias), mais recentes primeiro |
+| `Esc` / `0` | Sair | encerra o programa e libera a memória |
 
 ### Novo: um item ou vários de uma vez
 
@@ -68,9 +69,9 @@ A primeira linha digitada decide o modo:
 | Tecla | Ação |
 | --- | --- |
 | Setas ou `W` `A` `S` `D` | move a seleção |
-| `0` a `8` | abre a opção direto |
+| `1` a `9` | abre a opção direto |
 | `Enter` | confirma a opção selecionada |
-| `Esc` | sai do programa na hora (o mesmo que `0 - Sair`) |
+| `Esc` ou `0` | sai do programa na hora |
 
 ### Como digitar resistências
 

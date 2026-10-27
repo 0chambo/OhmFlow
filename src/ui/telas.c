@@ -38,6 +38,12 @@
 #define ALTURA_REINICIALIZAR  17
 #define ALTURA_DIFERENCIAL    10
 #define ALTURA_ENCERRAMENTO   4
+#define ALTURA_HISTORICO_BASE 10 /* + uma linha por ação */
+
+/* Ações mostradas no Histórico e larguras das colunas: quando, ação,
+ * resistor, detalhe, resultado */
+#define HISTORICO_MAX 15
+static const int HIST_LARG[] = { 11, 13, 10, 16, 14 };
 
 /* Larguras das colunas da tabela de estoque: #, Resistência, Quantidade */
 static const int TAB_LARG[] = { 2, 12, 10 };
@@ -369,9 +375,9 @@ int navegar_menu(int selecao, int tecla)
         return selecao;
 
     /* Converte seleção para (col, row) */
-    if (selecao == 0) {
+    if (selecao == OPCAO_HISTORICO) {
         row = 4;
-        col = 0; /* coluna padrão ao sair de Sair */
+        col = 0; /* coluna padrão ao sair do Histórico */
     } else if (selecao >= 1 && selecao <= 4) {
         col = 0;
         row = selecao - 1;
@@ -382,13 +388,13 @@ int navegar_menu(int selecao, int tecla)
 
     switch (tecla) {
     case KEY_UP:
-        if (row == 4) { row = 3; } /* de Sair vai para linha 3 */
-        else if (row == 0) { row = 4; } /* do topo vai para Sair */
+        if (row == 4) { row = 3; } /* do Histórico vai para linha 3 */
+        else if (row == 0) { row = 4; } /* do topo vai para o Histórico */
         else row--;
         break;
     case KEY_DOWN:
-        if (row == 4) { row = 0; } /* de Sair vai para linha 0 */
-        else if (row == 3) { row = 4; } /* da última linha vai para Sair */
+        if (row == 4) { row = 0; } /* do Histórico vai para linha 0 */
+        else if (row == 3) { row = 4; } /* da última linha vai para o Histórico */
         else row++;
         break;
     case KEY_LEFT:
@@ -402,17 +408,17 @@ int navegar_menu(int selecao, int tecla)
     }
 
     /* Converte de volta para seleção */
-    if (row == 4) return 0; /* Sair */
+    if (row == 4) return OPCAO_HISTORICO;
     return col == 0 ? row + 1 : row + 5;
 }
 
 int menu_tecla_opcao(int tecla, int selecao)
 {
-    /* Esc ou fim da entrada (EOF, Ctrl+D, terminal fechado) encerram como Sair */
-    if (tecla == KEY_ESC || tecla == KEY_FIM) return OPCAO_SAIR;
+    /* Esc, tecla 0 ou fim da entrada (EOF, Ctrl+D, terminal fechado) saem */
+    if (tecla == KEY_ESC || tecla == KEY_FIM || tecla == '0') return OPCAO_SAIR;
 
-    /* Acesso rápido por dígito */
-    if (tecla >= '0' && tecla < '0' + OPCAO_TOTAL) return tecla - '0';
+    /* Acesso rápido por dígito (1-9) */
+    if (tecla >= '1' && tecla < '0' + OPCAO_TOTAL) return tecla - '0';
 
     /* Enter confirma seleção atual */
     if (tecla == '\r' || tecla == '\n') return selecao;
@@ -423,8 +429,8 @@ int menu_tecla_opcao(int tecla, int selecao)
 void desenha_menu(const Lista *li, int selecao)
 {
     static const char *const ROTULOS[OPCAO_TOTAL] = {
-        "Sair", "Novo", "Remover", "Listar", "Consultar",
-        "Retirar", "Repor", "Reinicializar", "(diferencial)"
+        "", "Novo", "Remover", "Listar", "Consultar",
+        "Retirar", "Repor", "Reinicializar", "(diferencial)", "Hist\xc3\xb3rico"
     };
     char linhas[6][160];
     const char *ptrs[6];
@@ -452,10 +458,11 @@ void desenha_menu(const Lista *li, int selecao)
         ptrs[i] = linhas[i];
     }
     {
-        const char *cs = (selecao == 0) ? lrj : dim;
-        const char *bs = (selecao == 0) ? bold : "";
-        snprintf(linhas[4], sizeof linhas[4], " %s%s%s%s %s[0]%s %s",
-                 bs, cs, bullet, rs, cs, rs, ROTULOS[OPCAO_SAIR]);
+        /* [9] Histórico na linha de baixo */
+        const char *cs = (selecao == OPCAO_HISTORICO) ? lrj : neon;
+        const char *bs = (selecao == OPCAO_HISTORICO) ? bold : "";
+        snprintf(linhas[4], sizeof linhas[4], " %s%s%s%s %s[%d]%s %s",
+                 bs, cs, bullet, rs, cs, OPCAO_HISTORICO, rs, ROTULOS[OPCAO_HISTORICO]);
     }
     ptrs[4] = linhas[4];
 
@@ -472,8 +479,8 @@ void desenha_menu(const Lista *li, int selecao)
     {
         const char *dica =
             "\xe2\x86\x91\xe2\x86\x93\xe2\x86\x90\xe2\x86\x92"
-            "/WASD Navegar \xc2\xb7 [0-8] Acesso r\xc3\xa1pido \xc2\xb7 [Enter] Confirmar"
-            " \xc2\xb7 [Esc] Sair";
+            "/WASD Navegar \xc2\xb7 [1-9] Acesso r\xc3\xa1pido \xc2\xb7 [Enter] Confirmar"
+            " \xc2\xb7 [Esc/0] Sair";
         int esq = (cols - (int)ui_largura(dica)) / 2;
         if (esq < 0) esq = 0;
         printf("%*s%s%s%s\n", esq, "", dim, dica, rs);
@@ -500,7 +507,8 @@ int tela_menu(const Lista *li)
             if (erro[0]) ui_mensagem(UI_ERRO, "%s", erro);
             if (!ui_ler_linha("Op\xc3\xa7\xc3\xa3o: ", buf, sizeof buf)) return OPCAO_SAIR;
             op = strtol(buf, &fim, 10);
-            if (buf[0] != '\0' && *fim == '\0' && op >= 0 && op < OPCAO_TOTAL)
+            if (buf[0] != '\0' && *fim == '\0' && op == 0) return OPCAO_SAIR;
+            if (buf[0] != '\0' && *fim == '\0' && op >= 1 && op < OPCAO_TOTAL)
                 return (int)op;
             {
                 char citado[40];
@@ -899,6 +907,83 @@ void tela_diferencial(void)
     abre_tela("Diferencial", ALTURA_DIFERENCIAL);
     registra(LOG_INFO, "DIFERENCIAL", NULL, "EM BREVE", NULL);
     ui_caixa_feedback(UI_INFO, "Em breve", "Funcionalidade diferencial em desenvolvimento");
+    voltar_ao_menu();
+}
+
+/* ---- [3] histórico ---------------------------------------------------- */
+
+/* Copia s em buf com no máximo `largura` colunas visíveis (UTF-8); se cortar,
+ * termina com reticências */
+static void corta(const char *s, char *buf, size_t n, int largura)
+{
+    size_t i = 0;
+    int w = 0, cabe = (int)ui_largura(s) <= largura;
+    for (; s[i] != '\0' && i + 4 < n; i++) {
+        if (((unsigned char)s[i] & 0xC0) != 0x80) { /* início de caractere */
+            if (w == (cabe ? largura : largura - 1)) break;
+            w++;
+        }
+        buf[i] = s[i];
+    }
+    buf[i] = '\0';
+    if (!cabe) strcat(buf, "\xE2\x80\xA6"); /* … */
+}
+
+static int cor_do_nivel(const char *nivel)
+{
+    if (strcmp(nivel, "ERRO") == 0) return UI_COR_VERMELHO;
+    if (strcmp(nivel, "AVISO") == 0) return UI_COR_AMARELO;
+    return UI_COR_VERDE;
+}
+
+void tela_historico(void)
+{
+    static const char *const TITULOS[5] = {
+        "Quando", "Ação", "Resistor", "Detalhe", "Resultado"
+    };
+    LogEntrada v[HISTORICO_MAX];
+    char cab[5][48], cel[5][128], quando[16];
+    const char *ptrs[5];
+    const char *rs = ui_cor(UI_COR_RESET);
+    int n = log_ultimas(v, HISTORICO_MAX), i, c;
+
+    abre_tela("Histórico", ALTURA_HISTORICO_BASE + n);
+    if (n == 0) {
+        ui_mensagem(UI_INFO, "Nenhuma ação registrada nos últimos %d dias.",
+                    LOG_DIAS_HISTORICO);
+        registra(LOG_INFO, "HISTÓRICO", NULL, "VAZIO", NULL);
+        voltar_ao_menu();
+        return;
+    }
+
+    for (c = 0; c < 5; c++) {
+        snprintf(cab[c], sizeof cab[c], "%s%s%s", ui_cor(UI_COR_NEGRITO), TITULOS[c], rs);
+        ptrs[c] = cab[c];
+    }
+    ui_tabela_borda(UI_TAB_TOPO, HIST_LARG, 5);
+    ui_tabela_linha(ptrs, HIST_LARG, NULL, 5);
+    ui_tabela_borda(UI_TAB_MEIO, HIST_LARG, 5);
+    for (i = n - 1; i >= 0; i--) { /* mais recente primeiro */
+        const LogEntrada *e = &v[i];
+        char texto[96];
+        /* "27/10/2026 14:03:20" -> "27/10 14:03" */
+        snprintf(quando, sizeof quando, "%.5s %.5s", e->data, e->data + 11);
+        corta(quando, cel[0], sizeof cel[0], HIST_LARG[0]);
+        corta(e->acao, cel[1], sizeof cel[1], HIST_LARG[1]);
+        corta(e->alvo, cel[2], sizeof cel[2], HIST_LARG[2]);
+        corta(e->detalhe, cel[3], sizeof cel[3], HIST_LARG[3]);
+        corta(e->resultado, texto, sizeof texto, HIST_LARG[4]);
+        snprintf(cel[4], sizeof cel[4], "%s%s%s", ui_cor(cor_do_nivel(e->nivel)), texto, rs);
+        for (c = 0; c < 5; c++) ptrs[c] = cel[c];
+        ui_tabela_linha(ptrs, HIST_LARG, NULL, 5);
+    }
+    ui_tabela_borda(UI_TAB_BASE, HIST_LARG, 5);
+    ui_dica("%d %s mais %s (últimos %d dias)", n,
+            plural(n, "ação", "ações"),
+            plural(n, "recente", "recentes"), LOG_DIAS_HISTORICO);
+    /* registrado depois da leitura, para a tela não listar a si mesma */
+    registra(LOG_INFO, "HISTÓRICO", NULL, "OK", "%d %s", n,
+             plural(n, "ação", "ações"));
     voltar_ao_menu();
 }
 

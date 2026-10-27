@@ -41,6 +41,7 @@ int main(void)
         case OPCAO_REPOR:         tela_repor(estoque);         break;
         case OPCAO_REINICIALIZAR: tela_reinicializar(estoque); break;
         case OPCAO_DIFERENCIAL:   tela_diferencial();          break;
+        case OPCAO_HISTORICO:     tela_historico();            break;
         default:                                               break;
         }
     }

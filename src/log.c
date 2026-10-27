@@ -95,16 +95,21 @@ static void cria_pastas(const char *caminho)
     CRIA_PASTA(tmp);
 }
 
-int log_caminho_do_dia(char *buf, size_t n)
+/* Caminho do arquivo de log do dia que contém o instante t */
+static int caminho_do_dia_de(time_t t, char *buf, size_t n)
 {
     char pasta[TAM_CAMINHO], dia[16];
-    time_t t = agora();
     const struct tm *tm = localtime(&t);
     int r;
     if (tm == NULL || !resolve_pasta(pasta, sizeof pasta)) return 0;
     strftime(dia, sizeof dia, "%Y-%m-%d", tm);
     r = snprintf(buf, n, "%s" SEP "ohmflow_%s.log", pasta, dia);
     return r > 0 && (size_t)r < n;
+}
+
+int log_caminho_do_dia(char *buf, size_t n)
+{
+    return caminho_do_dia_de(agora(), buf, n);
 }
 
 /* "27/10/2026 14:03:12" */
@@ -185,6 +190,91 @@ size_t log_formata_linha(char *buf, size_t n, time_t t, int nivel, const char *a
 
     snprintf(buf, n, "%s", linha);
     return strlen(buf);
+}
+
+/* ---- leitura ----------------------------------------------------------- */
+
+/* Copia s[0..len) para buf (capacidade n) sem os espaços do fim */
+static void copia_campo(char *buf, size_t n, const char *s, size_t len)
+{
+    while (len > 0 && s[len - 1] == ' ') len--;
+    if (len >= n) len = n - 1;
+    memcpy(buf, s, len);
+    buf[len] = '\0';
+}
+
+int log_parse_linha(const char *linha, LogEntrada *e)
+{
+    char *destinos[6];
+    size_t tamanhos[6];
+    const char *p, *sep;
+    size_t len;
+    int i;
+
+    if (linha == NULL || e == NULL) return 0;
+    /* começa com "dd/mm/aaaa hh:mm:ss" */
+    if (strlen(linha) < 19 || linha[2] != '/' || linha[5] != '/' || linha[13] != ':')
+        return 0;
+
+    destinos[0] = e->data;    tamanhos[0] = sizeof e->data;
+    destinos[1] = e->nivel;   tamanhos[1] = sizeof e->nivel;
+    destinos[2] = e->acao;    tamanhos[2] = sizeof e->acao;
+    destinos[3] = e->alvo;    tamanhos[3] = sizeof e->alvo;
+    destinos[4] = e->detalhe; tamanhos[4] = sizeof e->detalhe;
+    destinos[5] = e->resultado; tamanhos[5] = sizeof e->resultado;
+
+    p = linha;
+    for (i = 0; i < 5; i++) {
+        sep = strstr(p, " | ");
+        if (sep == NULL) return 0;
+        copia_campo(destinos[i], tamanhos[i], p, (size_t)(sep - p));
+        p = sep + 3;
+    }
+    if (strstr(p, " | ") != NULL) return 0; /* coluna a mais */
+    len = strcspn(p, "\r\n");
+    copia_campo(destinos[5], tamanhos[5], p, len);
+    return 1;
+}
+
+/* Inverte v[ini..fim) (para girar o buffer circular) */
+static void inverte(LogEntrada *v, int ini, int fim)
+{
+    while (ini < --fim) {
+        LogEntrada t = v[ini];
+        v[ini++] = v[fim];
+        v[fim] = t;
+    }
+}
+
+int log_ultimas(LogEntrada *v, int max)
+{
+    char caminho[TAM_CAMINHO], linha[TAM_LINHA];
+    time_t hoje = agora();
+    long total = 0;
+    int d, ini;
+
+    if (v == NULL || max <= 0) return 0;
+    /* do dia mais antigo para hoje; buffer circular guarda as `max` últimas */
+    for (d = LOG_DIAS_HISTORICO - 1; d >= 0; d--) {
+        FILE *f;
+        if (!caminho_do_dia_de(hoje - (time_t)d * 86400, caminho, sizeof caminho)) continue;
+        f = fopen(caminho, "r");
+        if (f == NULL) continue;
+        while (fgets(linha, sizeof linha, f) != NULL) {
+            LogEntrada e;
+            if (!log_parse_linha(linha, &e)) continue;
+            v[total % max] = e;
+            total++;
+        }
+        fclose(f);
+    }
+    if (total <= max) return (int)total;
+    /* o mais antigo está em total % max: gira para a ordem cronológica */
+    ini = (int)(total % max);
+    inverte(v, 0, ini);
+    inverte(v, ini, max);
+    inverte(v, 0, max);
+    return max;
 }
 
 /* ---- sessão ------------------------------------------------------------ */

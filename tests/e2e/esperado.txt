@@ -61,5 +61,11 @@ Estoque atual
 33 kΩ
 3 tipos · 15 peças
 
+Histórico
+Quando
+LISTAR
+LOTE CONCLUÍDO
+ações mais recentes
+
 Obrigado por usar o OhmFlow
 Estoque final: 3 tipos · 15 peças
