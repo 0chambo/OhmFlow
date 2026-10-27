@@ -16,12 +16,15 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <io.h>
+#include <conio.h>
 #define UI_ISATTY _isatty
 #define UI_FILENO _fileno
 #ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
 #endif
 #else
+#include <errno.h>
+#include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #define UI_ISATTY isatty
@@ -105,6 +108,7 @@ void ui_definir_saida(FILE *f) { ui_out = f; }
 void ui_definir_cor(int ativa) { cor_ativa = ativa != 0; }
 int  ui_cor_ativa(void)        { return cor_ativa; }
 int  ui_interativo(void)       { return entrada_tty && saida_tty; }
+void ui_definir_interativo(int ativo) { entrada_tty = saida_tty = ativo != 0; }
 
 const char *ui_cor(int cor)
 {
@@ -180,15 +184,70 @@ void ui_cursor(int visivel)
     }
 }
 
+#define TECLA_ESTENDIDA_0   0
+#define TECLA_ESTENDIDA_224 224
+
+int ui_espera_enter_de(int (*proxima)(void *ctx), void *ctx)
+{
+    for (;;) {
+        int c = proxima(ctx);
+        if (c == EOF) return 0;
+        if (c == '\r' || c == '\n') return 1;
+        if ((c == TECLA_ESTENDIDA_0 || c == TECLA_ESTENDIDA_224) && proxima(ctx) == EOF)
+            return 0; /* setas, F1...: o código da tecla vem no 2º byte */
+    }
+}
+
+#ifdef _WIN32
+static int le_getch(void *ctx)
+{
+    (void)ctx;
+    return _getch(); /* lê do console sem eco */
+}
+#else
+static int le_byte_cru(void *ctx)
+{
+    unsigned char b;
+    (void)ctx;
+    for (;;) {
+        long n = (long)read(STDIN_FILENO, &b, 1);
+        if (n == 1) return b;
+        if (n < 0 && errno == EINTR) continue;
+        return EOF;
+    }
+}
+#endif
+
+void ui_esperar_enter(void)
+{
+#ifdef _WIN32
+    ui_espera_enter_de(le_getch, NULL);
+#else
+    struct termios original, cru;
+    if (tcgetattr(STDIN_FILENO, &original) != 0) {
+        int c; /* sem controle do terminal: descarta a linha */
+        while ((c = getchar()) != '\n' && c != EOF)
+            ;
+        return;
+    }
+    cru = original;
+    cru.c_lflag &= ~((tcflag_t)(ICANON | ECHO));
+    cru.c_cc[VMIN] = 1;
+    cru.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSANOW, &cru);
+    ui_espera_enter_de(le_byte_cru, NULL);
+    tcsetattr(STDIN_FILENO, TCSANOW, &original);
+#endif
+}
+
 void ui_pausar(const char *msg)
 {
-    char lixo[256];
     if (!ui_interativo()) return;
     fprintf(saida(), "\n  %s%s%s", ui_cor(UI_COR_DIM),
             msg ? msg : "Pressione Enter para continuar...", ui_cor(UI_COR_RESET));
     fflush(saida());
-    while (fgets(lixo, sizeof lixo, stdin) != NULL && strchr(lixo, '\n') == NULL)
-        ; /* descarta até o fim da linha */
+    ui_esperar_enter();
+    putc('\n', saida());
 }
 
 /* ---- largura e alinhamento ------------------------------------------- */

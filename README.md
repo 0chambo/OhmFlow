@@ -30,15 +30,38 @@ O programa depende só de DLLs que já vêm no Windows 10/11 (`KERNEL32`, `USER3
 
 | Opção | Função | Descrição |
 | --- | --- | --- |
-| 1 | Inserir | cadastra um novo tipo de resistor (resistência + quantidade) |
+| 1 | Novo | cadastra um novo tipo de resistor (resistência + quantidade), um por vez ou em massa |
 | 2 | Remover | apaga um tipo de resistor da lista, com confirmação |
 | 3 | Listar | tabela de todos os tipos em ordem crescente, impressos em mΩ / Ω / kΩ / MΩ |
 | 4 | Consultar | mostra a quantidade disponível de uma resistência |
 | 5 | Retirar | dá baixa de uma quantidade no estoque |
 | 6 | Repor | soma uma quantidade ao estoque |
-| 7 | Inicializar/Reinicializar | esvazia a lista, com confirmação |
+| 7 | Inicializar/Reinicializar | esvazia a lista, com aviso e confirmação |
 | 8 | Diferencial | a definir |
 | 0 | Sair | encerra o programa e libera a memória |
+
+### Novo: um item ou vários de uma vez
+
+A primeira linha digitada decide o modo:
+
+- **Só a resistência** (ex.: `4k7`): a tela pergunta a quantidade e cadastra um item, como sempre.
+- **Resistência e quantidade** (ex.: `4k7 50`): entra na inserção em massa. Digite um item por linha e encerre com **Enter vazio**. Uma linha só com a resistência pede a quantidade em separado. Duplicados e linhas inválidas não interrompem: ao final, uma caixa de resumo mostra quantos itens foram inseridos, quantos eram duplicados e quantos eram inválidos.
+
+```text
+» Resistência: 10k 5
+  ✔ 10 kΩ inserido (5 un.)
+» Resistência [quantidade]: 22k 3
+  ✔ 22 kΩ inserido (3 un.)
+» Resistência [quantidade]: 10k 1
+  ⚠ 10 kΩ já cadastrado - ignorado
+» Resistência [quantidade]:
+┌─ ✔ SUCESSO ──────────────────────────┐
+│ Inserção em massa concluída          │
+│ Inseridos : 2                        │
+│ Duplicados: 1                        │
+│ Inválidos : 0                        │
+└──────────────────────────────────────┘
+```
 
 ### Teclas do menu
 
@@ -77,7 +100,9 @@ tests/
 ├── test_framework.h              mini framework de testes (sem dependências)
 ├── test_lista.c                  testes da lista
 ├── test_formatacao.c             testes de parse e formatação
-├── test_ui.c                     testes de alinhamento e cores
+├── test_ui.c                     testes de alinhamento, cores e espera por Enter
+├── test_telas.c                  testes da navegação do menu
+├── test_novo.c                   testes da tela Novo (parse_item, inserção em massa) e ajustes de tela
 └── e2e/                          teste ponta a ponta: entrada simulada e saída esperada
 ```
 
@@ -119,12 +144,7 @@ Todas as funções abaixo ficam em [src/lista.c](src/lista.c) e devolvem um cód
 
 Todas as operações começam pela mesma função interna, `localiza(li, ohms)`. Ela percorre a lista e **para no primeiro nó com resistência maior ou igual** à procurada; graças à ordenação, não precisa ir até o fim. Em vez do nó, devolve o **endereço do ponteiro** que aponta para ele (`Elem **pp`): o campo `inicio` do descritor ou o `prox` do nó anterior. Assim, inserir ou remover no início, no meio ou no fim da lista é o mesmo código, sem ponteiro `ant` nem caso especial para o primeiro nó.
 
-`localiza` também conta os nós examinados. O total fica disponível em `lista_passos(li)`, e a tela **Consultar** mostra o resultado:
-
-```text
-  4,7 kΩ → 12 unidades
-  Busca: 2 nós visitados
-```
+`localiza` também conta os nós examinados. O total fica disponível em `lista_passos(li)` (usado nos testes; a tela não o mostra):
 
 | Lista `220 Ω → 4,7 kΩ → 10 kΩ`, procurando | Nós visitados | Por quê |
 | --- | --- | --- |
@@ -279,7 +299,7 @@ flowchart LR
 Detalhes:
 
 - **Retirar até zerar** é permitido: o tipo continua cadastrado com quantidade 0. Para apagá-lo de vez, use Remover.
-- **Consultar** (`consulta_lista`) usa a mesma busca, só lê a quantidade e não altera nada. A tela mostra também quantos nós a busca visitou (`lista_passos`).
+- **Consultar** (`consulta_lista`) usa a mesma busca, só lê a quantidade e não altera nada.
 - Para **trocar o valor de uma resistência** cadastrada errada, remova o tipo e insira de novo com o valor certo. A chave de ordenação nunca é alterada no lugar.
 
 ### Outras operações

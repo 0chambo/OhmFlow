@@ -55,6 +55,15 @@ int menu_tecla_opcao(int tecla, int selecao);
 /* Redesenha o menu com a opção `selecao` destacada */
 void desenha_menu(const Lista *li, int selecao);
 
+/* Resultado de parse_item() */
+enum { ITEM_INVALIDO = 0, ITEM_SO_RESISTENCIA, ITEM_COMPLETO };
+
+/* Interpreta uma linha da tela Novo: "<resistência> [quantidade]", ex.:
+ * "4k7 50" -> ITEM_COMPLETO; "4k7" -> ITEM_SO_RESISTENCIA (quantidade 0);
+ * qualquer outra coisa (campo a mais, valor ou quantidade inválidos) ->
+ * ITEM_INVALIDO. Quantidade: inteiro de 0 a INT_MAX. */
+int parse_item(const char *s, Resistor *r);
+
 void tela_boas_vindas(void);
 int  tela_menu(const Lista *li); /* devolve OPCAO_*; EOF devolve OPCAO_SAIR */
 void tela_inserir(Lista *li);
