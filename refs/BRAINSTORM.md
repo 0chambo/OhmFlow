@@ -17,15 +17,9 @@ A Tabela 1 compara as ideias por esforço, quanto mostram de estrutura de dados 
 | # | Ideia | Esforço | Estrutura de dados | Impacto na demo | Arquivos novos/alterados |
 | --- | --- | :---: | :---: | :---: | --- |
 | 1 | Resistor mais próximo / substituto | Baixo | Alto | Alto | `lista.c`, `telas.c` |
-| 2 | Associação série/paralelo | Médio | Alto | Alto | `calculo.c` (novo), `telas.c` |
-| 3 | Divisor de tensão | Médio | Médio | Médio | `calculo.c` (novo), `telas.c` |
 | 4 | Desfazer última operação (pilha) | Médio | **Muito alto** | Alto | `historico.c` (novo), `main.c`, `telas.c` |
-| 5 | Busca por faixa de valores | Baixo | Alto | Médio | `lista.c`, `telas.c` |
-| 6 | Código de cores das faixas | Médio | Baixo | **Muito alto** | `cores.c` (novo), `telas.c` |
-| 7 | Cobertura da série E12/E24 | Baixo | Médio | Médio | `series.c` (novo), `telas.c` |
 | 8 | Alerta de estoque baixo | Baixo | Baixo | Médio | `lista.c`, `telas.c` |
 | 9 | Salvar/carregar estoque em arquivo | Médio | Baixo | Alto | `arquivo.c` (novo), `main.c`, `telas.c` |
-| 10 | Estatísticas do estoque | Baixo | Médio | Baixo | `lista.c`, `telas.c` |
 
 **Recomendação:** a opção 8 vira um **submenu "Ferramentas do laboratório"** com 2 ou 3 itens desta lista. Isso dá mais especificidade do que uma função solta. Combinações que funcionam bem juntas:
 
@@ -35,7 +29,7 @@ A Tabela 1 compara as ideias por esforço, quanto mostram de estrutura de dados 
 Se for uma função só: **#2 Série/paralelo**. Usa a lista ordenada de verdade (busca de pares), resolve um problema real do almoxarifado ("não tenho 5 kΩ, que dois resistores do estoque dão isso?") e rende uma boa explicação no relatório.
 
 > [!NOTE]
-> **Observação — ideias favoritas (Grolla):** as preferidas são a **#4 Desfazer última operação (pilha)**, a **#6 Código de cores das faixas**, a **#8 Alerta de estoque baixo**, a **#9 Salvar/carregar estoque em arquivo** e a **#10 Estatísticas do estoque**. Para a #9, ver também a [evolução com SQLite](#evolução-futura-banco-local-com-sqlite) prevista para uma versão mais robusta.
+> **Observação — ideias favoritas (Grolla):** as preferidas são a **#4 Desfazer última operação (pilha)**, a **#8 Alerta de estoque baixo**, a **#9 Salvar/carregar estoque em arquivo**. Para a #9, ver também a [evolução com SQLite](#evolução-futura-banco-local-com-sqlite) prevista para uma versão mais robusta.
 
 ---
 
@@ -60,38 +54,6 @@ Sugestão: 4,7 kΩ
 
 ---
 
-### 2. Associação série/paralelo
-
-**O que faz:** dois modos.
-
-- **Calcular:** o usuário digita valores (`1k + 2k2` ou `1k // 1k`) e vê a resistência equivalente.
-- **Combinar a partir do estoque:** o usuário digita um alvo e o programa procura **pares do estoque** em série (`R1 + R2`) ou em paralelo (`R1·R2 / (R1+R2)`) que chegam mais perto dele, mostrando o erro percentual.
-
-**Por que encaixa:** a busca de pares em série numa lista ordenada é o clássico de **dois ponteiros**: um no início, outro no fim, andando conforme a soma passa do alvo ou fica abaixo dele. Numa lista simplesmente encadeada não dá para andar para trás. Duas saídas, ambas boas de explicar no relatório:
-
-1. Copiar os valores para um vetor auxiliar (O(n)) e aplicar os dois ponteiros (O(n)).
-2. Laço duplo O(n²) com parada antecipada: como a lista é ordenada, para quando `R1 + R2` já passou do alvo.
-
-**Exemplo de saída:**
-
-```text
-Alvo: 5 kΩ
-  Série:    2,2 kΩ + 2,7 kΩ = 4,9 kΩ    erro -2,0 %
-  Paralelo: 10 kΩ // 10 kΩ = 5 kΩ       erro  0,0 %
-```
-
-**Implementação:** módulo novo `src/calculo.c/.h` com `serie`, `paralelo` e `melhor_par_serie`/`melhor_par_paralelo`, recebendo a `Lista` só para leitura (`percorre_lista`). Os testes cobrem: valores exatos, o mesmo resistor usado duas vezes (só se a quantidade for ≥ 2), estoque vazio e com um item só.
-
----
-
-### 3. Divisor de tensão
-
-**O que faz:** o usuário digita `Vin` e o `Vout` desejado. O programa procura no estoque o par `R1`, `R2` com `Vout = Vin · R2 / (R1 + R2)` mais próximo e mostra a tensão obtida e o erro.
-
-**Por que encaixa:** é uma tarefa diária de laboratório e reaproveita o código de pares da ideia #2. Bom complemento dela; sozinha é menos interessante.
-
----
-
 ### 4. Desfazer última operação (pilha)
 
 **O que faz:** cada Inserir, Remover, Retirar, Repor e Reinicializar empilha o que foi feito. A opção "Desfazer" desempilha e reverte a última operação, mostrando o que foi revertido. Pode haver também "Ver histórico", que lista a pilha do topo para a base.
@@ -106,37 +68,6 @@ Alvo: 5 kΩ
 - Para manter lógica e interface separadas, as telas registram a operação **depois** de a lista confirmar `LISTA_OK`.
 
 **Esforço:** médio. Mexe em todas as telas de escrita, mas cada mudança é pequena.
-
----
-
-### 5. Busca por faixa de valores
-
-**O que faz:** o usuário digita mínimo e máximo (ex.: `1k` a `10k`). O programa mostra a tabela só com os resistores nesse intervalo e o total de peças da faixa.
-
-**Por que encaixa:** na lista ordenada a busca **começa** no primeiro nó ≥ mínimo e **para** no primeiro nó > máximo, sem percorrer o resto. Fácil de demonstrar com o contador de passos.
-
-**Implementação:** `percorre_faixa(const Lista*, double min, double max, callback, ctx)` em `lista.c`, reaproveitando a tabela de Listar.
-
----
-
-### 6. Código de cores das faixas
-
-**O que faz:** dois sentidos.
-
-- **Valor → cores:** `4k7` → amarelo · violeta · vermelho (4 faixas, tolerância opcional), desenhado com fundo ANSI colorido, como um resistor no terminal.
-- **Cores → valor:** o usuário escolhe as faixas e o programa mostra o valor e a quantidade no estoque.
-
-**Por que encaixa:** é o mais visual para a apresentação e a UI já tem cores ANSI ([ui.h](../src/ui/ui.h)). Pede cuidado com `NO_COLOR=1` (cair para os nomes das cores) e `-DOHM_ASCII`.
-
-**Limitações:** só representa valores com 2 dígitos significativos (4 faixas) ou 3 (5 faixas). Valores como `4,75 kΩ` exigem o modo de 5 faixas. Abaixo de 1 Ω usa os multiplicadores ouro (×0,1) e prata (×0,01).
-
----
-
-### 7. Cobertura da série E12/E24
-
-**O que faz:** compara o estoque com os valores comerciais padrão (E12: 10, 12, 15, 18, 22, 27, 33, 39, 47, 56, 68, 82 em cada década) e mostra **quais valores padrão faltam** numa década escolhida ou em todas.
-
-**Por que encaixa:** ajuda a decidir o que comprar. É uma "intersecção" entre a lista ordenada e um vetor estático ordenado, e as duas sequências ordenadas podem ser percorridas juntas em O(n + m), no estilo da intercalação (merge).
 
 ---
 
@@ -194,14 +125,6 @@ Funcionamento:
 4. A tabela `movimentacao` alimenta o histórico (#4) e as estatísticas (#10) sem mudar a lista.
 
 Pontos de atenção: a amálgama é grande (~9 MB de código-fonte) e o cppcheck deve ignorar `src/vendor/`. Os testes usam banco em memória (`:memory:`) para não deixar arquivo para trás. O `Makefile` precisa de `-DSQLITE_OMIT_LOAD_EXTENSION` e de compilar `sqlite3.c` sem `-pedantic -Werror`, porque o código de terceiros tem warnings.
-
----
-
-### 10. Estatísticas do estoque
-
-**O que faz:** mostra o menor e o maior valor (primeiro e último nó, O(1)/O(n)), a mediana por quantidade de peças e um histograma de peças por década (mΩ, Ω, 10 Ω, ..., MΩ) com barras no terminal.
-
-**Por que encaixa:** usa a ordenação (o mínimo é o primeiro nó; a mediana sai percorrendo até metade das peças), mas impressiona pouco sozinha.
 
 ---
 

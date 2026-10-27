@@ -7,7 +7,7 @@
 **Controle de estoque de resistores para o almoxarifado do laboratório — direto no terminal.**
 
 [![CI](https://github.com/Grolla05/OhmFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Grolla05/OhmFlow/actions/workflows/ci.yml)
-![C99](https://img.shields.io/badge/linguagem-C99-orange)
+![C](https://img.shields.io/badge/linguagem-C-orange)
 ![Windows](https://img.shields.io/badge/plataforma-Windows%2010%2F11-blue)
 [![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green)](LICENSE)
 
