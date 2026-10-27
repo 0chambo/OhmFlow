@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
 #  include <conio.h>
 #else
 #  include <termios.h>
@@ -46,9 +48,13 @@
 #define HISTORICO_MAX 15
 static const int HIST_LARG[] = { 11, 13, 10, 16, 14 };
 
-/* Larguras das colunas da tabela de estoque: #, Resistência, Quantidade */
-static const int TAB_LARG[] = { 2, 12, 10 };
-static const int TAB_DIR[]  = { 1, 0, 1 };
+/* Larguras das colunas da tabela de estoque: #, Resistência, Quantidade,
+ * Estoque (barra + porcentagem do total de peças) */
+#define TAB_COLUNAS  4
+#define BARRA_LISTAR 10
+#define BARRA_CONSULTAR 16
+static const int TAB_LARG[] = { 2, 12, 10, BARRA_LISTAR + 5 };
+static const int TAB_DIR[]  = { 1, 0, 1, 0 };
 
 /* Checkpoint da sessão (telas_definir_checkpoint); NULL = não registra */
 static Checkpoint *checkpoint = NULL;
@@ -194,7 +200,133 @@ static int ler_cadastrado(const char *acao, Lista *li, double *ohms, char *txt, 
 
 /* ---- [1] boas-vindas -------------------------------------------------- */
 
-void tela_boas_vindas(void)
+/* "OHMFLOW" na fonte figlet ANSI Shadow (6 x 63): █ é o corpo da letra e o
+ * traço duplo (╔═╗║╚╝) é a sombra deslocada para baixo/direita */
+static const char *const BANNER[BANNER_LINHAS] = {
+    " \xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x97 \xE2\x96\x88\xE2\x96\x88\xE2\x95\x97  "
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x95\x97   \xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x97\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97      "
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x95\x97 \xE2\x96\x88\xE2\x96\x88\xE2\x95\x97    \xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x97",
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91"
+    "  \xE2\x96\x88\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97 \xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94"
+    "\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x95\x9D\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x91     \xE2\x96\x88\xE2\x96\x88\xE2\x95\x94"
+    "\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91    \xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x95\x91",
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91   \xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x97  \xE2\x96\x88\xE2\x96\x88\xE2\x95\x91     "
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91   \xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91 \xE2\x96\x88"
+    "\xE2\x95\x97 \xE2\x96\x88\xE2\x96\x88\xE2\x95\x91",
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91   \xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94\xE2\x95\x90\xE2\x95\x90"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91"
+    "\xE2\x95\x9A\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94\xE2\x95\x9D\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94\xE2\x95\x90"
+    "\xE2\x95\x90\xE2\x95\x9D  \xE2\x96\x88\xE2\x96\x88\xE2\x95\x91     "
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91   \xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x97\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91",
+    "\xE2\x95\x9A\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x94\xE2\x95\x9D\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91"
+    "  \xE2\x96\x88\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x95\x91 \xE2\x95\x9A\xE2\x95\x90\xE2\x95\x9D \xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x91\xE2\x96\x88\xE2\x96\x88\xE2\x95\x91     "
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x97\xE2\x95\x9A\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94\xE2\x95\x9D\xE2\x95\x9A"
+    "\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x95\x94\xE2\x96\x88\xE2\x96\x88"
+    "\xE2\x96\x88\xE2\x95\x94\xE2\x95\x9D",
+    " \xE2\x95\x9A\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90"
+    "\xE2\x95\x90\xE2\x95\x9D \xE2\x95\x9A\xE2\x95\x90\xE2\x95\x9D  "
+    "\xE2\x95\x9A\xE2\x95\x90\xE2\x95\x9D\xE2\x95\x9A\xE2\x95\x90\xE2\x95\x9D"
+    "     \xE2\x95\x9A\xE2\x95\x90\xE2\x95\x9D\xE2\x95\x9A\xE2\x95\x90"
+    "\xE2\x95\x9D     \xE2\x95\x9A\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90"
+    "\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x95\x9D \xE2\x95\x9A"
+    "\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x95\x9D"
+    "  \xE2\x95\x9A\xE2\x95\x90\xE2\x95\x90\xE2\x95\x9D\xE2\x95\x9A"
+    "\xE2\x95\x90\xE2\x95\x90\xE2\x95\x9D ",
+};
+
+/* Degradê do corpo: creme no topo, laranja (primária) na última linha com █;
+ * sombra num laranja escuro, como o contorno do efeito "3D" */
+static const int BANNER_TOPO[3]   = { 255, 232, 176 };
+static const int BANNER_BASE[3]   = { 255, 135, 0 };
+static const int BANNER_SOMBRA[3] = { 138, 74, 0 };
+
+int banner_disponivel(int colunas)
+{
+#ifdef OHM_ASCII
+    (void)colunas;
+    return 0;
+#else
+    return colunas >= BANNER_COLUNAS + 2;
+#endif
+}
+
+/* Acrescenta texto em buf[*pos], sem passar de n (corta em silêncio) */
+static void anexa(char *buf, size_t n, size_t *pos, const char *fmt, ...)
+{
+    va_list ap;
+    int k;
+    if (*pos >= n) return;
+    va_start(ap, fmt);
+    k = vsnprintf(buf + *pos, n - *pos, fmt, ap);
+    va_end(ap);
+    if (k < 0) return;
+    *pos = (size_t)k < n - *pos ? *pos + (size_t)k : n - 1;
+}
+
+int banner_linha(int i, char *buf, size_t n)
+{
+    const unsigned char *p;
+    const int *cor_atual = NULL;
+    int corpo[3], c, colunas = 0, cor = ui_cor_ativa();
+    size_t pos = 0;
+
+    if (buf == NULL || n == 0) return 0;
+    buf[0] = '\0';
+    if (i < 0 || i >= BANNER_LINHAS) return 0;
+
+    /* interpola a cor do corpo entre a 1ª e a penúltima linha (a última só
+     * tem sombra) */
+    for (c = 0; c < 3; c++)
+        corpo[c] = BANNER_TOPO[c]
+                 + (BANNER_BASE[c] - BANNER_TOPO[c]) * i / (BANNER_LINHAS - 2);
+
+    for (p = (const unsigned char *)BANNER[i]; *p; ) {
+        size_t tam = *p < 0x80 ? 1 : (*p >= 0xF0 ? 4 : (*p >= 0xE0 ? 3 : 2));
+        const int *alvo = NULL;
+        if (*p != ' ')
+            alvo = (p[0] == 0xE2 && p[1] == 0x96 && p[2] == 0x88) /* █ */
+                 ? corpo : BANNER_SOMBRA;
+        if (cor && alvo != NULL && alvo != cor_atual) {
+            anexa(buf, n, &pos, "\033[38;2;%d;%d;%dm", alvo[0], alvo[1], alvo[2]);
+            cor_atual = alvo;
+        }
+        anexa(buf, n, &pos, "%.*s", (int)tam, (const char *)p);
+        p += tam;
+        colunas++;
+    }
+    if (cor_atual != NULL) anexa(buf, n, &pos, "%s", ui_cor(UI_COR_RESET));
+    return colunas;
+}
+
+/* Logo antigo (figlet "big", só ASCII): terminal estreito ou -DOHM_ASCII */
+static void boas_vindas_texto(int cols, int rows)
 {
     /* "big" figlet font — O mais largo, ~65 cols, contínuo */
     static const char *const LOGO[6] = {
@@ -207,18 +339,12 @@ void tela_boas_vindas(void)
     };
     static const char SUBTITULO[] = "Estoque de Resistores \xe2\x80\x94 Estrutura de Dados";
     static const char MSG[]       = "Sistema pronto. Pressione Enter para continuar";
-
-    /* Altura do conteúdo: 6 logo + 1 blank + subtítulo + 2 blank + msg = 11 */
-    int cols = ui_colunas_terminal();
-    int rows = ui_linhas_terminal();
-    int i, esq, topo;
     const char *laranja = ui_cor(UI_COR_PRIMARIA);
     const char *dim     = ui_cor(UI_COR_DIM);
     const char *rs      = ui_cor(UI_COR_RESET);
+    int i, esq, topo;
 
-    ui_limpar_tela();
-
-    /* Padding vertical para centralizar */
+    /* Altura do conteúdo: 6 logo + 1 blank + subtítulo + 2 blank + msg = 11 */
     topo = (rows - 11) / 2;
     if (topo < 1) topo = 1;
     for (i = 0; i < topo; i++) putchar('\n');
@@ -244,10 +370,61 @@ void tela_boas_vindas(void)
         if (m_esq < 0) m_esq = 0;
         printf("%*s%s\xc2\xbb%s %s%s%s\n", m_esq, "", laranja, rs, dim, MSG, rs);
     }
+}
+
+/* Banner ANSI Shadow + subtítulo + "► [ PRESSIONE ENTER ] ◄" em caixa dupla */
+static void boas_vindas_banner(int cols, int rows)
+{
+    static const char SUBTITULO[] =
+        "\xE2\x96\xBA\xE2\x96\xBA\xE2\x96\xBA ESTOQUE DE RESISTORES // ESTRUTURA DE DADOS "
+        "\xE2\x97\x84\xE2\x97\x84\xE2\x97\x84";                       /* ►►► ... ◄◄◄ */
+    static const char DETALHE[] = "[ LISTA DIN\xC3\x82MICA ORDENADA ]";
+    static const char *const MSG[1] = {
+        "\xE2\x96\xBA [ PRESSIONE ENTER PARA COME\xC3\x87" "AR ] \xE2\x97\x84"
+    };
+    char linha[BANNER_TAM_LINHA];
+    const char *sec = ui_cor(UI_COR_SECUNDARIA);
+    const char *dim = ui_cor(UI_COR_DIM);
+    const char *rs  = ui_cor(UI_COR_RESET);
+    int i, esq, topo;
+
+    /* Altura: 6 banner + 1 blank + 2 subtítulos + 1 blank + caixa (3) = 13 */
+    topo = (rows - 13) / 2;
+    if (topo < 1) topo = 1;
+    for (i = 0; i < topo; i++) putchar('\n');
+
+    esq = (cols - BANNER_COLUNAS) / 2;
+    for (i = 0; i < BANNER_LINHAS; i++) {
+        banner_linha(i, linha, sizeof linha);
+        printf("%*s%s\n", esq, "", linha);
+    }
+    putchar('\n');
+
+    esq = (cols - (int)ui_largura(SUBTITULO)) / 2;
+    printf("%*s%s%s%s\n", esq > 0 ? esq : 0, "", sec, SUBTITULO, rs);
+    esq = (cols - (int)ui_largura(DETALHE)) / 2;
+    printf("%*s%s%s%s\n\n", esq > 0 ? esq : 0, "", dim, DETALHE, rs);
+    fflush(stdout); /* a caixa sai pela saída da ui */
+
+    ui_caixa_centralizada(UI_MOLDURA_DUPLA, UI_COR_PRIMARIA, NULL, NULL, MSG, 1, 0);
+}
+
+void tela_boas_vindas(void)
+{
+    int cols = ui_colunas_terminal();
+    int rows = ui_linhas_terminal();
+
+    ui_limpar_tela();
+    // cppcheck-suppress knownConditionTrueFalse ; sempre 0 só com -DOHM_ASCII
+    if (banner_disponivel(cols) && ui_interativo())
+        boas_vindas_banner(cols, rows);
+    else
+        boas_vindas_texto(cols, rows);
 
     /* Aguarda Enter sem ecoar o que for digitado */
     if (ui_interativo()) {
         fflush(stdout);
+        ui_descartar_entrada(); /* teclas apertadas durante a abertura */
         ui_esperar_enter();
     }
 }
@@ -311,9 +488,20 @@ static void restaura_terminal_e_sai(int sinal)
     if (cursor_oculto && write(STDOUT_FILENO, "\033[?25h", 6) < 0) {
         /* nada a fazer: o processo está encerrando */
     }
+#else
+    if (cursor_oculto) { /* Ctrl+C: escreve direto no console, sem stdio */
+        DWORD escritos;
+        WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), "\033[?25h", 6, &escritos, NULL);
+    }
 #endif
     signal(sinal, SIG_DFL);
     raise(sinal);
+}
+
+/* Saída por qualquer caminho (exit, fim da main) com o cursor escondido */
+static void mostra_cursor_ao_sair(void)
+{
+    if (cursor_oculto) ui_cursor(1);
 }
 
 /* Instala (uma vez) os tratadores que devolvem terminal e cursor ao normal */
@@ -322,6 +510,7 @@ static void protege_terminal(void)
     static int instalado = 0;
     if (instalado) return;
     instalado = 1;
+    atexit(mostra_cursor_ao_sair);
     signal(SIGINT, restaura_terminal_e_sai);
     signal(SIGTERM, restaura_terminal_e_sai);
 #ifdef SIGHUP
@@ -341,7 +530,9 @@ static void mostra_cursor(int visivel)
 static int ler_tecla(void)
 {
 #ifdef _WIN32
-    int c = _getch();
+    int c;
+    fflush(stdout); /* stdout tem buffer completo: o quadro sai antes de esperar */
+    c = _getch();
     if (c == 0 || c == 224) {
         int c2 = _getch();
         if (c2 == 72) return KEY_UP;
@@ -355,6 +546,7 @@ static int ler_tecla(void)
 #else
     struct termios raw_t;
     int c;
+    fflush(stdout);
     if (tcgetattr(STDIN_FILENO, &term_original) != 0) {
         /* sem controle do terminal: leitura comum, EOF ainda encerra */
         c = getchar();
@@ -534,15 +726,20 @@ int tela_menu(const Lista *li)
     /* Modo interativo: navegação por teclado */
     protege_terminal();
     mostra_cursor(0); /* esconde cursor piscante durante navegação */
+    ui_quadro_reset(); /* vindo de outra tela: o 1º quadro limpa tudo */
+    ui_descartar_entrada(); /* teclas que sobraram da tela anterior */
     for (;;) {
         int c, op, pad, i;
-        ui_limpar_tela();
+        /* sem limpar a tela a cada tecla: o quadro novo sobrescreve o
+         * anterior e sai numa escrita só, sem piscar */
+        ui_quadro_inicio();
 
         /* Centralização vertical: pad linhas em branco acima do menu */
         pad = (ui_linhas_terminal() - MENU_LINHAS) / 2;
         for (i = 0; i < pad; i++) putchar('\n');
 
         desenha_menu(li, selecao);
+        ui_quadro_fim();
 
         c = ler_tecla();
 
@@ -805,18 +1002,40 @@ void tela_remover(Lista *li)
 
 /* ---- [3] listar -------------------------------------------------------- */
 
+/* Fatia de `qtd` no total de peças, em 0..1 (0 com estoque vazio) */
+static double fatia(int qtd, long long total)
+{
+    return total > 0 ? (double)qtd / (double)total : 0.0;
+}
+
+/* "█████▌░░░░  56%": barra da fatia e a porcentagem (vermelha se zerada) */
+static void celula_fatia(int qtd, long long total, int largura, char *buf, size_t n)
+{
+    char barra[256];
+    double f = fatia(qtd, total);
+    ui_barra(f, largura, UI_COR_PRIMARIA, barra, sizeof barra);
+    snprintf(buf, n, "%s %s%3d%%%s", barra, qtd == 0 ? ui_cor(UI_COR_VERMELHO) : "",
+             (int)(f * 100 + 0.5), ui_cor(UI_COR_RESET));
+}
+
+/* Contexto de linha_estoque: número da linha e total de peças */
+typedef struct {
+    int indice;
+    long long total;
+} LinhaEstoque;
+
 static void linha_estoque(const Resistor *r, void *ctx)
 {
-    int *indice = ctx;
-    char txt[TAM_RES], c_idx[16], c_res[96], c_qtd[48];
-    const char *celulas[3];
+    LinhaEstoque *le = ctx;
+    char txt[TAM_RES], c_idx[16], c_res[96], c_qtd[48], c_est[320];
+    const char *celulas[TAB_COLUNAS];
     char *espaco;
 
     formata_resistencia(r->resistencia, txt, sizeof txt);
     espaco = strrchr(txt, ' '); /* separa número e unidade p/ alinhar */
     if (espaco != NULL) *espaco = '\0';
 
-    snprintf(c_idx, sizeof c_idx, "%d", ++*indice);
+    snprintf(c_idx, sizeof c_idx, "%d", ++le->indice);
     /* valor no texto padrão: só a moldura da tabela é colorida */
     snprintf(c_res, sizeof c_res, "%7s %s", txt, espaco ? espaco + 1 : "");
     snprintf(c_qtd, sizeof c_qtd, "%s%d%s", r->quantidade == 0 ? ui_cor(UI_COR_VERMELHO) : "",
@@ -825,16 +1044,19 @@ static void linha_estoque(const Resistor *r, void *ctx)
     celulas[0] = c_idx;
     celulas[1] = c_res;
     celulas[2] = c_qtd;
-    ui_tabela_linha(celulas, TAB_LARG, TAB_DIR, 3);
+    celula_fatia(r->quantidade, le->total, BARRA_LISTAR, c_est, sizeof c_est);
+    celulas[3] = c_est;
+    ui_tabela_linha(celulas, TAB_LARG, TAB_DIR, TAB_COLUNAS);
 }
 
 void tela_listar(const Lista *li)
 {
-    char cab[3][48];
-    const char *cabecalho[3];
+    char cab[TAB_COLUNAS][48];
+    const char *cabecalho[TAB_COLUNAS];
     const char *ng = ui_cor(UI_COR_NEGRITO), *rs = ui_cor(UI_COR_RESET);
-    int indice = 0, tipos = tamanho_lista(li);
+    int c, tipos = tamanho_lista(li);
     long long pecas = total_pecas(li);
+    LinhaEstoque le;
 
     abre_tela("Estoque atual", ALTURA_LISTAR_BASE + tipos);
     registra(LOG_INFO, "LISTAR", NULL, "OK", "%d %s %s %lld %s", tipos,
@@ -847,15 +1069,16 @@ void tela_listar(const Lista *li)
     snprintf(cab[0], sizeof cab[0], "%s#%s", ng, rs);
     snprintf(cab[1], sizeof cab[1], "%sResistência%s", ng, rs);
     snprintf(cab[2], sizeof cab[2], "%sQuantidade%s", ng, rs);
-    cabecalho[0] = cab[0];
-    cabecalho[1] = cab[1];
-    cabecalho[2] = cab[2];
+    snprintf(cab[3], sizeof cab[3], "%sEstoque%s", ng, rs);
+    for (c = 0; c < TAB_COLUNAS; c++) cabecalho[c] = cab[c];
 
-    ui_tabela_borda(UI_TAB_TOPO, TAB_LARG, 3);
-    ui_tabela_linha(cabecalho, TAB_LARG, TAB_DIR, 3);
-    ui_tabela_borda(UI_TAB_MEIO, TAB_LARG, 3);
-    percorre_lista(li, linha_estoque, &indice);
-    ui_tabela_borda(UI_TAB_BASE, TAB_LARG, 3);
+    le.indice = 0;
+    le.total = pecas;
+    ui_tabela_borda(UI_TAB_TOPO, TAB_LARG, TAB_COLUNAS);
+    ui_tabela_linha(cabecalho, TAB_LARG, TAB_DIR, TAB_COLUNAS);
+    ui_tabela_borda(UI_TAB_MEIO, TAB_LARG, TAB_COLUNAS);
+    percorre_lista(li, linha_estoque, &le);
+    ui_tabela_borda(UI_TAB_BASE, TAB_LARG, TAB_COLUNAS);
     ui_dica("%d %s %s %lld %s", tipos, plural(tipos, "tipo", "tipos"), UI_PONTO,
             pecas, plural(pecas, "peça", "peças"));
     voltar_ao_menu();
@@ -878,16 +1101,19 @@ void tela_consultar(Lista *li)
     }
     formata_resistencia(ohms, txt, sizeof txt);
     if (consulta_lista(li, ohms, &qtd) == LISTA_OK) {
-        char linha[96];
-        const char *linhas[1];
+        char linha[96], fatia_txt[320], linha_fatia[352];
+        const char *linhas[2];
         registra(LOG_INFO, "CONSULTAR", txt, "OK", "qtd %d", qtd);
         snprintf(linha, sizeof linha, "%s%s%s %s %s%d%s %s", ui_cor(UI_COR_NEGRITO), txt,
                  ui_cor(UI_COR_RESET), UI_SETA,
                  qtd == 0 ? ui_cor(UI_COR_VERMELHO) : ui_cor(UI_COR_VERDE), qtd,
                  ui_cor(UI_COR_RESET), plural(qtd, "unidade", "unidades"));
         linhas[0] = linha;
+        celula_fatia(qtd, total_pecas(li), BARRA_CONSULTAR, fatia_txt, sizeof fatia_txt);
+        snprintf(linha_fatia, sizeof linha_fatia, "%s do estoque", fatia_txt);
+        linhas[1] = linha_fatia;
         putchar('\n');
-        ui_caixa(UI_MOLDURA_SIMPLES, UI_COR_BORDA, NULL, NULL, linhas, 1, 26);
+        ui_caixa(UI_MOLDURA_SIMPLES, UI_COR_BORDA, NULL, NULL, linhas, 2, 26);
     } else {
         registra(LOG_AVISO, "CONSULTAR", txt, "NÃO ENCONTRADO", NULL);
         ui_mensagem(UI_ERRO, "%s não está no estoque", txt);
@@ -1230,12 +1456,17 @@ static void checkpoint_interativo(Lista *li)
     int cursor = ck_posicao(checkpoint);
     protege_terminal();
     mostra_cursor(0);
+    ui_quadro_reset();
     for (;;) {
         int c, total = ck_total(checkpoint);
-        abre_tela("Checkpoint da sess\xC3\xA3o", ALTURA_CHECKPOINT_BASE + total);
+        ui_quadro_inicio(); /* setas redesenham por cima, sem limpar a tela */
+        ui_espaco_vertical(ALTURA_CHECKPOINT_BASE + total);
+        ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Checkpoint da sess\xC3\xA3o", NULL,
+                 NULL, 0, UI_LARGURA);
         desenha_checkpoint(cursor);
         ui_dica("\xE2\x86\x91\xE2\x86\x93/WS Escolher o ponto %s [Enter] Ir para ele %s [Esc] Voltar",
                 UI_PONTO, UI_PONTO);
+        ui_quadro_fim();
         c = ler_tecla();
         if (c == KEY_ESC || c == KEY_FIM || c == '0') { mostra_cursor(1); return; }
         if (c == '\r' || c == '\n') break;

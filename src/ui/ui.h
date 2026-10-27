@@ -49,6 +49,8 @@ enum {
 #define UI_PONTO       "-"
 #define UI_BARRA       "|"
 #define UI_BULLET      "*"
+#define UI_BLOCO_CHEIO "#"
+#define UI_BLOCO_VAZIO "."
 #else
 #define UI_ICONE_OK    "\xE2\x9C\x94" /* ✔ */
 #define UI_ICONE_ERRO  "\xE2\x9C\x96" /* ✖ */
@@ -59,6 +61,8 @@ enum {
 #define UI_PONTO       "\xC2\xB7"     /* · */
 #define UI_BARRA       "\xE2\x94\x82" /* │ */
 #define UI_BULLET      "\xE2\x97\x8F" /* ● */
+#define UI_BLOCO_CHEIO "\xE2\x96\x88" /* █ */
+#define UI_BLOCO_VAZIO "\xE2\x96\x91" /* ░ */
 #endif
 
 /* Estado / configuração */
@@ -80,6 +84,21 @@ int  ui_espera_enter_de(int (*proxima)(void *ctx), void *ctx);
 int  ui_colunas_terminal(void);
 int  ui_linhas_terminal(void);
 void ui_cursor(int visivel); /* 1 = mostra, 0 = esconde */
+/* Programa interativo: stdout com buffer completo, para cada quadro sair
+ * numa escrita só (chamar antes de qualquer saída; main liga) */
+void ui_bufferizar_saida(void);
+/* Descarta teclas pendentes (seta segurada, Enter a mais) antes de esperar
+ * uma nova; sem terminal não faz nada */
+void ui_descartar_entrada(void);
+
+/* Quadros redesenhados sem limpar a tela (menus navegados por setas):
+ * ui_quadro_inicio leva o cursor ao topo e o desenho seguinte sobrescreve o
+ * anterior; ui_quadro_fim apaga o que sobrou abaixo e envia tudo de uma vez.
+ * O 1º quadro, um quadro após ui_limpar_tela/ui_quadro_reset ou após o
+ * terminal mudar de tamanho limpa a tela inteira. Sem terminal: nada */
+void ui_quadro_inicio(void);
+void ui_quadro_fim(void);
+void ui_quadro_reset(void);
 
 /* Modo centralizado (desligado por padrão; main liga quando é terminal):
  * caixas e tabelas saem centralizadas pela própria largura, e mensagens,
@@ -112,6 +131,11 @@ void ui_linha_respondida(const char *prompt, const char *resposta);
 /* Alinhamento por colunas visíveis (UTF-8 e códigos ANSI considerados) */
 size_t ui_largura(const char *s);
 void   ui_pad(FILE *out, const char *s, int largura, int alinhar_dir);
+
+/* Barra de proporção com `largura` colunas visíveis: parte cheia (█ e
+ * blocos de 1/8 ▏▎▍▌▋▊▉) na cor `cor`, resto ░ apagado. `fracao` fora de
+ * 0..1 é saturada. Com -DOHM_ASCII: '#' e '.' */
+void ui_barra(double fracao, int largura, int cor, char *buf, size_t n);
 
 /* Tabelas com bordas */
 void ui_tabela_borda(int pos, const int *larguras, int ncol);

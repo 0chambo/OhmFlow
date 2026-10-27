@@ -6,6 +6,7 @@
 #ifndef TELAS_H
 #define TELAS_H
 
+#include <stddef.h>
 #include "lista.h"
 #include "checkpoint.h"
 
@@ -80,6 +81,21 @@ void telas_definir_resistor(int modo);
 /* Nova posição do marcador na tela de checkpoint: ↑/W vai para a ação mais
  * recente, ↓/S para a mais antiga, sem passar de 0..total */
 int checkpoint_navegar(int pos, int tecla, int total);
+
+/* Banner "OHMFLOW" da boas-vindas na fonte ANSI Shadow: blocos █ com degradê
+ * vertical (creme -> laranja, cor 24 bits) e sombra em traço duplo (╔═╗║╚╝) */
+#define BANNER_LINHAS    6
+#define BANNER_COLUNAS   63
+#define BANNER_TAM_LINHA 2048
+
+/* Escreve em buf a linha `i` do banner, colorida se a cor estiver ligada
+ * (termina com reset). Devolve a largura visível (BANNER_COLUNAS), ou 0 e
+ * buf vazio se `i` for inválida */
+int banner_linha(int i, char *buf, size_t n);
+
+/* 1 se o banner cabe em `colunas` (com uma coluna de folga de cada lado);
+ * 0 com -DOHM_ASCII ou terminal estreito (fica o logo de texto) */
+int banner_disponivel(int colunas);
 
 void tela_boas_vindas(void);
 int  tela_menu(const Lista *li); /* devolve OPCAO_*; EOF devolve OPCAO_SAIR */

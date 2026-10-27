@@ -526,6 +526,98 @@ static void teste_espaco_vertical(void)
     fclose(f);
 }
 
+/* ---- barra de proporção ----------------------------------------------- */
+
+static void teste_barra_largura_fixa(void)
+{
+    static const double FRACOES[] = { -1.0, 0.0, 0.01, 0.125, 1.0 / 3, 0.5, 0.97, 1.0, 2.0 };
+    char buf[256];
+    size_t i;
+    ui_definir_cor(1);
+    for (i = 0; i < sizeof FRACOES / sizeof FRACOES[0]; i++) {
+        ui_barra(FRACOES[i], 10, UI_COR_PRIMARIA, buf, sizeof buf);
+        ASSERT_EQ_INT(10, ui_largura(buf));
+    }
+    ui_definir_cor(0);
+    for (i = 0; i < sizeof FRACOES / sizeof FRACOES[0]; i++) {
+        ui_barra(FRACOES[i], 7, UI_COR_PRIMARIA, buf, sizeof buf);
+        ASSERT_EQ_INT(7, ui_largura(buf));
+    }
+}
+
+static void teste_barra_extremos(void)
+{
+    char buf[256];
+    ui_definir_cor(0);
+    ui_barra(0.0, 4, UI_COR_PRIMARIA, buf, sizeof buf);
+    ASSERT_STR_EQ(UI_BLOCO_VAZIO UI_BLOCO_VAZIO UI_BLOCO_VAZIO UI_BLOCO_VAZIO, buf);
+    ui_barra(-0.5, 4, UI_COR_PRIMARIA, buf, sizeof buf); /* saturada em 0 */
+    ASSERT_STR_EQ(UI_BLOCO_VAZIO UI_BLOCO_VAZIO UI_BLOCO_VAZIO UI_BLOCO_VAZIO, buf);
+    ui_barra(1.0, 4, UI_COR_PRIMARIA, buf, sizeof buf);
+    ASSERT_STR_EQ(UI_BLOCO_CHEIO UI_BLOCO_CHEIO UI_BLOCO_CHEIO UI_BLOCO_CHEIO, buf);
+    ui_barra(3.0, 4, UI_COR_PRIMARIA, buf, sizeof buf); /* saturada em 1 */
+    ASSERT_STR_EQ(UI_BLOCO_CHEIO UI_BLOCO_CHEIO UI_BLOCO_CHEIO UI_BLOCO_CHEIO, buf);
+    ui_barra(0.5, 4, UI_COR_PRIMARIA, buf, sizeof buf);
+    ASSERT_STR_EQ(UI_BLOCO_CHEIO UI_BLOCO_CHEIO UI_BLOCO_VAZIO UI_BLOCO_VAZIO, buf);
+}
+
+static void teste_barra_oitavos(void)
+{
+#ifndef OHM_ASCII
+    char buf[256];
+    ui_definir_cor(0);
+    /* 1/16 de 2 células = 1/8 de célula -> ▏ */
+    ui_barra(1.0 / 16, 2, UI_COR_PRIMARIA, buf, sizeof buf);
+    ASSERT_STR_EQ("\xE2\x96\x8F" UI_BLOCO_VAZIO, buf);
+    /* 0,5 de 1 célula -> ▌ */
+    ui_barra(0.5, 1, UI_COR_PRIMARIA, buf, sizeof buf);
+    ASSERT_STR_EQ("\xE2\x96\x8C", buf);
+    /* 1 cheia + 7/8 -> █▉ */
+    ui_barra(15.0 / 16, 2, UI_COR_PRIMARIA, buf, sizeof buf);
+    ASSERT_STR_EQ(UI_BLOCO_CHEIO "\xE2\x96\x89", buf);
+#endif
+}
+
+static void teste_barra_cores(void)
+{
+    char buf[256];
+    ui_definir_cor(1);
+    ui_barra(0.5, 4, UI_COR_PRIMARIA, buf, sizeof buf);
+    ASSERT_TRUE(strstr(buf, "\033[38;5;208m") != NULL); /* parte cheia  */
+    ASSERT_TRUE(strstr(buf, "\033[2m") != NULL);        /* parte vazia  */
+    ui_definir_cor(0);
+    ui_barra(0.5, 4, UI_COR_PRIMARIA, buf, sizeof buf);
+    ASSERT_TRUE(strchr(buf, '\033') == NULL);
+}
+
+static void teste_barra_buffer_pequeno(void)
+{
+    char buf[5];
+    ui_definir_cor(0);
+    ui_barra(1.0, 10, UI_COR_PRIMARIA, buf, sizeof buf); /* não estoura */
+    ASSERT_TRUE(strlen(buf) < sizeof buf);
+}
+
+/* ---- quadros sem limpar a tela ---------------------------------------- */
+
+static void teste_quadro_fora_do_terminal_nao_emite(void)
+{
+    char buf[TAM_SAIDA];
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_interativo(0);
+    ui_definir_saida(f);
+    ui_quadro_reset();
+    ui_quadro_inicio();
+    ui_quadro_fim();
+    ui_descartar_entrada();
+    conteudo(f, buf, sizeof buf);
+    ASSERT_STR_EQ("", buf);
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
 int main(void)
 {
     ui_init();
@@ -560,5 +652,11 @@ int main(void)
     RUN_TEST(teste_espaco_vertical);
     RUN_TEST(teste_paleta_primaria_secundaria);
     RUN_TEST(teste_interface_sem_ciano_nem_azul);
+    RUN_TEST(teste_barra_largura_fixa);
+    RUN_TEST(teste_barra_extremos);
+    RUN_TEST(teste_barra_oitavos);
+    RUN_TEST(teste_barra_cores);
+    RUN_TEST(teste_barra_buffer_pequeno);
+    RUN_TEST(teste_quadro_fora_do_terminal_nao_emite);
     return tf_resumo("test_ui");
 }

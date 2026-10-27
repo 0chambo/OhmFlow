@@ -42,6 +42,9 @@ static int entrada_tty = 0;    /* stdin é terminal?                            
 static int saida_tty = 0;      /* stdout é terminal?                            */
 static int vt_ok = 1;          /* terminal entende sequências ANSI?             */
 static int centralizar = 0;    /* telas centralizadas (ui_definir_centralizado) */
+static int quadro_aberto = 0;  /* entre ui_quadro_inicio e ui_quadro_fim        */
+static int quadro_limpar = 1;  /* próximo quadro limpa a tela inteira?          */
+static int quadro_cols = 0, quadro_rows = 0; /* tamanho do terminal no último quadro */
 
 static void repete(FILE *out, const char *s, int n);
 static void recuo_texto(FILE *out, size_t largura);
@@ -49,6 +52,12 @@ static void recuo_texto(FILE *out, size_t largura);
 static FILE *saida(void)
 {
     return ui_out != NULL ? ui_out : stdout;
+}
+
+/* fflush, exceto no meio de um quadro: ele sai inteiro em ui_quadro_fim */
+static void descarrega(FILE *out)
+{
+    if (!quadro_aberto) fflush(out);
 }
 
 static const char *const CODIGOS[UI_COR_TOTAL] = {
@@ -126,7 +135,9 @@ const char *ui_cor(int cor)
 
 void ui_limpar_tela(void)
 {
+    quadro_limpar = 1; /* a tela mudou: o próximo quadro começa do zero */
     if (ui_interativo() && vt_ok) {
+        fflush(saida()); /* o que está no buffer sai antes do Fill do console */
 #ifdef _WIN32
         /* Preenche o buffer inteiro: nada de tela anterior para reaparecer */
         HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -201,7 +212,7 @@ void ui_espaco_vertical(int altura)
     if (!centralizar) return;
     pad = (ui_linhas_terminal() - altura) / 2;
     repete(saida(), "\n", pad);
-    fflush(saida());
+    descarrega(saida());
 }
 
 void ui_cursor(int visivel)
@@ -210,6 +221,53 @@ void ui_cursor(int visivel)
         fputs(visivel ? "\033[?25h" : "\033[?25l", saida());
         fflush(saida());
     }
+}
+
+void ui_bufferizar_saida(void)
+{
+    static int feito = 0;
+    if (feito || !ui_interativo()) return;
+    feito = 1;
+    setvbuf(stdout, NULL, _IOFBF, 1 << 16);
+}
+
+void ui_descartar_entrada(void)
+{
+    if (!entrada_tty) return;
+#ifdef _WIN32
+    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+#else
+    tcflush(STDIN_FILENO, TCIFLUSH);
+#endif
+}
+
+/* ---- quadros (redesenho sem limpar a tela) ---------------------------- */
+
+void ui_quadro_reset(void) { quadro_limpar = 1; }
+
+void ui_quadro_inicio(void)
+{
+    int cols, rows;
+    if (!(ui_interativo() && vt_ok)) return;
+    cols = ui_colunas_terminal();
+    rows = ui_linhas_terminal();
+    if (quadro_limpar || cols != quadro_cols || rows != quadro_rows) {
+        ui_limpar_tela();
+    } else {
+        fputs("\033[H", saida()); /* volta ao topo; o quadro novo sobrescreve */
+    }
+    quadro_limpar = 0;
+    quadro_cols = cols;
+    quadro_rows = rows;
+    quadro_aberto = 1;
+}
+
+void ui_quadro_fim(void)
+{
+    if (!(ui_interativo() && vt_ok)) return;
+    fputs("\033[J", saida()); /* apaga sobras do quadro anterior abaixo */
+    quadro_aberto = 0;
+    fflush(saida());
 }
 
 #define TECLA_ESTENDIDA_0   0
@@ -248,6 +306,7 @@ static int le_byte_cru(void *ctx)
 
 void ui_esperar_enter(void)
 {
+    fflush(saida());
 #ifdef _WIN32
     ui_espera_enter_de(le_getch, NULL);
 #else
@@ -412,7 +471,7 @@ static void ui_caixa_com_margem(int estilo, int cor_borda, const char *titulo_bo
     fprintf(out, "%s%s", cb, m->bl);
     repete(out, m->h, inner);
     fprintf(out, "%s%s\n", m->br, rs);
-    fflush(out);
+    descarrega(out);
 }
 
 void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
@@ -535,7 +594,7 @@ void ui_mensagem(int tipo, const char *fmt, ...)
     recuo_texto(saida(), ui_largura(icone_do_tipo(tipo)) + 1 + ui_largura(msg));
     fprintf(saida(), "%s%s %s%s\n", ui_cor(cor_do_tipo(tipo)), icone_do_tipo(tipo),
             msg, ui_cor(UI_COR_RESET));
-    fflush(saida());
+    descarrega(saida());
 }
 
 void ui_dica(const char *fmt, ...)
@@ -558,7 +617,7 @@ void ui_linha_respondida(const char *prompt, const char *resposta)
         recuo_texto(out, ui_largura(UI_PROMPT) + 1 + ui_largura(prompt));
     fprintf(out, "%s%s%s %s%s\n", ui_cor(UI_COR_PROMPT), UI_PROMPT, ui_cor(UI_COR_RESET),
             prompt ? prompt : "", resposta ? resposta : "");
-    fflush(out);
+    descarrega(out);
 }
 
 int ui_ler_linha(const char *prompt, char *buf, size_t n)
@@ -612,6 +671,60 @@ int ui_confirmar(const char *fmt, ...)
         ui_mensagem(UI_ERRO, "Responda s (sim) ou n (n\xC3\xA3o).");
     }
     return 0;
+}
+
+/* ---- barra de proporção ---------------------------------------------- */
+
+/* Acrescenta s em buf[*pos], sem passar de n (corta em silêncio) */
+static void anexa(char *buf, size_t n, size_t *pos, const char *s)
+{
+    size_t k = strlen(s);
+    if (*pos + 1 >= n) return;
+    if (k > n - 1 - *pos) k = n - 1 - *pos;
+    memcpy(buf + *pos, s, k);
+    *pos += k;
+    buf[*pos] = '\0';
+}
+
+void ui_barra(double fracao, int largura, int cor, char *buf, size_t n)
+{
+#ifndef OHM_ASCII
+    static const char *const OITAVOS[8] = {
+        "", "\xE2\x96\x8F", "\xE2\x96\x8E", "\xE2\x96\x8D",  /*   ▏ ▎ ▍ */
+        "\xE2\x96\x8C", "\xE2\x96\x8B", "\xE2\x96\x8A", "\xE2\x96\x89" /* ▌ ▋ ▊ ▉ */
+    };
+#endif
+    size_t pos = 0;
+    int cheias, resto, vazias, i;
+
+    if (buf == NULL || n == 0) return;
+    buf[0] = '\0';
+    if (largura <= 0) return;
+    if (!(fracao > 0.0)) fracao = 0.0; /* também NaN */
+    if (fracao > 1.0) fracao = 1.0;
+    {   /* arredonda para o oitavo de célula mais próximo */
+        int oitavos = (int)(fracao * largura * 8 + 0.5);
+#ifdef OHM_ASCII
+        oitavos = (oitavos + 4) / 8 * 8; /* sem frações: célula inteira */
+#endif
+        cheias = oitavos / 8;
+        resto = oitavos % 8;
+    }
+    vazias = largura - cheias - (resto > 0);
+
+    if (cheias > 0 || resto > 0) {
+        anexa(buf, n, &pos, ui_cor(cor));
+        for (i = 0; i < cheias; i++) anexa(buf, n, &pos, UI_BLOCO_CHEIO);
+#ifndef OHM_ASCII
+        anexa(buf, n, &pos, OITAVOS[resto]);
+#endif
+        anexa(buf, n, &pos, ui_cor(UI_COR_RESET));
+    }
+    if (vazias > 0) {
+        anexa(buf, n, &pos, ui_cor(UI_COR_DIM));
+        for (i = 0; i < vazias; i++) anexa(buf, n, &pos, UI_BLOCO_VAZIO);
+        anexa(buf, n, &pos, ui_cor(UI_COR_RESET));
+    }
 }
 
 /* ---- tabelas ---------------------------------------------------------- */
