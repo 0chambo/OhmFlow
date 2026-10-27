@@ -551,6 +551,16 @@ void ui_dica(const char *fmt, ...)
 
 /* ---- entrada ---------------------------------------------------------- */
 
+void ui_linha_respondida(const char *prompt, const char *resposta)
+{
+    FILE *out = saida();
+    if (centralizar)
+        recuo_texto(out, ui_largura(UI_PROMPT) + 1 + ui_largura(prompt));
+    fprintf(out, "%s%s%s %s%s\n", ui_cor(UI_COR_PROMPT), UI_PROMPT, ui_cor(UI_COR_RESET),
+            prompt ? prompt : "", resposta ? resposta : "");
+    fflush(out);
+}
+
 int ui_ler_linha(const char *prompt, char *buf, size_t n)
 {
     size_t len, ini = 0;

@@ -105,6 +105,9 @@ void ui_dica(const char *fmt, ...);
 /* Entrada */
 int  ui_ler_linha(const char *prompt, char *buf, size_t n); /* 0 em EOF */
 int  ui_confirmar(const char *fmt, ...);                     /* 1 = sim  */
+/* Reescreve uma pergunta já respondida, igual ao eco de ui_ler_linha
+ * (usado quando a tela é redesenhada depois da resposta) */
+void ui_linha_respondida(const char *prompt, const char *resposta);
 
 /* Alinhamento por colunas visíveis (UTF-8 e códigos ANSI considerados) */
 size_t ui_largura(const char *s);

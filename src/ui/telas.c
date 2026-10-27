@@ -23,6 +23,7 @@
 #include "ui.h"
 #include "formatacao.h"
 #include "log.h"
+#include "resistor.h"
 
 #define TENTATIVAS  3
 #define TAM_ENTRADA 128
@@ -30,7 +31,7 @@
 
 /* Altura aproximada de cada tela (linhas), para a centralização vertical:
  * título (3) + dicas + perguntas + caixa de feedback (5) + pausa (2) */
-#define ALTURA_NOVO           17
+#define ALTURA_NOVO           17 /* + RESISTOR_LINHAS com o desenho */
 #define ALTURA_REMOVER        14
 #define ALTURA_LISTAR_BASE    10 /* + uma linha por tipo */
 #define ALTURA_CONSULTAR      12
@@ -641,18 +642,68 @@ static void inserir_em_massa(Lista *li, Resistor primeiro)
     voltar_ao_menu();
 }
 
+/* O desenho do resistor só aparece no terminal com cores (sem terminal,
+ * NO_COLOR ou -DOHM_ASCII a tela fica como antes, e o e2e não muda) */
+static int mostra_resistor(void)
+{
+#ifdef OHM_ASCII
+    return 0;
+#else
+    return ui_interativo() && ui_cor_ativa();
+#endif
+}
+
+/* Título da tela Novo com o resistor dentro da caixa (faixas NULL = sem cor)
+ * e as dicas de formato */
+static void abre_tela_novo(const int *faixas)
+{
+    // cppcheck-suppress knownConditionTrueFalse ; sempre 0 só com -DOHM_ASCII
+    if (mostra_resistor()) {
+        static char arte[RESISTOR_LINHAS][RESISTOR_TAM_LINHA];
+        const char *linhas[RESISTOR_LINHAS];
+        int i;
+        resistor_arte(faixas, arte);
+        for (i = 0; i < RESISTOR_LINHAS; i++) linhas[i] = arte[i];
+        ui_limpar_tela();
+        ui_espaco_vertical(ALTURA_NOVO + RESISTOR_LINHAS);
+        ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Novo resistor", NULL,
+                 linhas, RESISTOR_LINHAS, UI_LARGURA);
+    } else {
+        abre_tela("Novo resistor", ALTURA_NOVO);
+    }
+    ui_dica("Formatos aceitos: 220 %s 4k7 %s 4.7k %s 1M %s 470m", UI_PONTO, UI_PONTO,
+            UI_PONTO, UI_PONTO);
+    ui_dica("Em massa: <resistência> <quantidade> por linha (ex.: 4k7 50)");
+    ui_dica("(Enter vazio cancela; em massa, encerra a lista)");
+    putchar('\n');
+}
+
+/* Redesenha a tela Novo com o resistor colorido pelo código de cores de
+ * `ohms` (tolerância sempre dourada), repete a linha já digitada e mostra
+ * o nome das faixas */
+static void colore_resistor(double ohms, const char *digitado)
+{
+    int faixas[RESISTOR_FAIXAS], cod;
+    // cppcheck-suppress knownConditionTrueFalse ; sempre 0 só com -DOHM_ASCII
+    if (!mostra_resistor()) return;
+    cod = codigo_cores(ohms, faixas);
+    abre_tela_novo(faixas);
+    ui_linha_respondida("Resistência: ", digitado);
+    if (cod == CORES_FORA)
+        ui_mensagem(UI_AVISO, "Abaixo de 0,1 %s: sem código de 4 faixas", SIMBOLO_OHM);
+    else
+        ui_dica("Faixas: %s %s %s %s %s %s %s%s", nome_cor_faixa(faixas[0]), UI_PONTO,
+                nome_cor_faixa(faixas[1]), UI_PONTO, nome_cor_faixa(faixas[2]), UI_PONTO,
+                nome_cor_faixa(faixas[3]), cod == CORES_APROXIMADO ? " (aprox.)" : "");
+}
+
 void tela_inserir(Lista *li)
 {
     Resistor r;
     char buf[TAM_ENTRADA], txt[TAM_RES];
     int t, tipo = ITEM_INVALIDO, res;
 
-    abre_tela("Novo resistor", ALTURA_NOVO);
-    ui_dica("Formatos aceitos: 220 %s 4k7 %s 4.7k %s 1M %s 470m", UI_PONTO, UI_PONTO,
-            UI_PONTO, UI_PONTO);
-    ui_dica("Em massa: <resistência> <quantidade> por linha (ex.: 4k7 50)");
-    ui_dica("(Enter vazio cancela; em massa, encerra a lista)");
-    putchar('\n');
+    abre_tela_novo(NULL);
 
     /* A primeira linha decide o modo: só a resistência -> um item, com a
      * quantidade perguntada em seguida; resistência e quantidade -> em massa */
@@ -668,6 +719,7 @@ void tela_inserir(Lista *li)
         feedback_cancelado("NOVO", NULL);
         return;
     }
+    colore_resistor(r.resistencia, buf);
     if (tipo == ITEM_COMPLETO) {
         inserir_em_massa(li, r);
         return;
