@@ -15,7 +15,7 @@ Antes de começar, certifique-se de ter instalado:
 | `git`      | 2.30+         | Controle de versão |
 | `cppcheck` | 2.10+ (opt.)  | Análise estática |
 
-Veja as instruções de instalação por SO no [README](../README.md#instalação-dos-pré-requisitos).
+Veja as instruções de instalação por SO no [guia de build](../docs/05-build-e-ambiente.md).
 
 ---
 
@@ -113,14 +113,14 @@ Para adicionar um caso de teste unitário, siga o padrão em `tests/test_lista.c
 
 ## Reportando bugs
 
-Use o template [Bug Report](ISSUE_TEMPLATE/bug_report.md) no GitHub Issues.  
+Use o template [Bug Report](ISSUE_TEMPLATE/bug_report.yml) no GitHub Issues.  
 Inclua sempre: SO, versão do compilador, passos para reproduzir e saída do terminal.
 
 ---
 
 ## Sugerindo funcionalidades
 
-Use o template [Feature Request](ISSUE_TEMPLATE/feature_request.md) no GitHub Issues.
+Use o template [Feature Request](ISSUE_TEMPLATE/feature_request.yml) no GitHub Issues.
 
 ---
 
