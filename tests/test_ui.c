@@ -309,6 +309,186 @@ static void teste_espera_enter_eof(void)
     ASSERT_EQ_INT(2, t.pos);
 }
 
+/* ---- telas centralizadas ---------------------------------------------- */
+
+/* Espaços no início de s */
+static int espacos_iniciais(const char *s)
+{
+    int n = 0;
+    while (s[n] == ' ') n++;
+    return n;
+}
+
+/* Margem esperada para um bloco de `largura` colunas */
+static int margem_esperada(int largura)
+{
+    int m = (ui_colunas_terminal() - largura) / 2;
+    return m > 0 ? m : 0;
+}
+
+static void teste_centralizado_desligado_por_padrao(void)
+{
+    ASSERT_EQ_INT(0, ui_centralizado());
+    ASSERT_EQ_INT(0, ui_margem());
+}
+
+static void teste_margem_do_bloco(void)
+{
+    ui_definir_centralizado(1);
+    ASSERT_EQ_INT(1, ui_centralizado());
+    ASSERT_EQ_INT(margem_esperada(UI_LARGURA + 2), ui_margem());
+    ui_definir_centralizado(0);
+    ASSERT_EQ_INT(0, ui_margem());
+}
+
+static void teste_caixa_centralizada_no_modo(void)
+{
+    char buf[TAM_SAIDA];
+    const char *linhas[] = { "Linha" };
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_definir_centralizado(1);
+    ui_caixa(UI_MOLDURA_SIMPLES, UI_COR_BORDA, "Titulo", NULL, linhas, 1, UI_LARGURA);
+    ui_definir_centralizado(0);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_EQ_INT(margem_esperada(UI_LARGURA + 2), espacos_iniciais(buf));
+    ASSERT_TRUE(linhas_mesma_largura(buf, NULL));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_caixa_larga_centralizada_pela_propria_largura(void)
+{
+    char buf[TAM_SAIDA], linha[80];
+    const char *linhas[1];
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    memset(linha, 'x', 60);
+    linha[60] = '\0';
+    linhas[0] = linha;
+    ui_definir_saida(f);
+    ui_definir_centralizado(1);
+    ui_caixa(UI_MOLDURA_SIMPLES, UI_COR_BORDA, NULL, NULL, linhas, 1, UI_LARGURA);
+    ui_definir_centralizado(0);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_EQ_INT(margem_esperada(60 + 2 + 2), espacos_iniciais(buf));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_texto_alinhado_ao_bloco(void)
+{
+    char buf[TAM_SAIDA];
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_definir_centralizado(1);
+    ui_dica("dica");
+    ui_definir_centralizado(0);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_EQ_INT(margem_esperada(UI_LARGURA + 2) + 2, espacos_iniciais(buf));
+    ASSERT_TRUE(strstr(buf, "dica") != NULL);
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_dica_larga_centralizada_pela_propria_largura(void)
+{
+    char buf[TAM_SAIDA], texto[80];
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    memset(texto, 'y', 60);
+    texto[60] = '\0';
+    ui_definir_saida(f);
+    ui_definir_centralizado(1);
+    ui_dica("%s", texto);
+    ui_definir_centralizado(0);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_EQ_INT(margem_esperada(60), espacos_iniciais(buf));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_mensagem_alinhada_ao_bloco(void)
+{
+    char buf[TAM_SAIDA];
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_definir_centralizado(1);
+    ui_mensagem(UI_ERRO, "falhou");
+    ui_definir_centralizado(0);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_EQ_INT(margem_esperada(UI_LARGURA + 2) + 2, espacos_iniciais(buf));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_tabela_centralizada(void)
+{
+    static const int larg[] = { 2, 12, 10 };
+    const char *celulas[] = { "1", "220", "5" };
+    char buf[TAM_SAIDA];
+    /* largura total: borda esquerda + (largura + 2 de respiro + borda) por coluna */
+    int total = 1 + (2 + 3) + (12 + 3) + (10 + 3);
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_definir_centralizado(1);
+    ui_tabela_borda(UI_TAB_TOPO, larg, 3);
+    ui_tabela_linha(celulas, larg, NULL, 3);
+    ui_tabela_borda(UI_TAB_BASE, larg, 3);
+    ui_definir_centralizado(0);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_EQ_INT(margem_esperada(total), espacos_iniciais(buf));
+    ASSERT_TRUE(linhas_mesma_largura(buf, NULL));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_tabela_sem_centralizar_mantem_recuo(void)
+{
+    static const int larg[] = { 2, 12, 10 };
+    char buf[TAM_SAIDA];
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_tabela_borda(UI_TAB_TOPO, larg, 3);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_EQ_INT(2, espacos_iniciais(buf));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_espaco_vertical(void)
+{
+    char buf[TAM_SAIDA];
+    int esperado = (ui_linhas_terminal() - 6) / 2, n = 0;
+    const char *p;
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_espaco_vertical(6);              /* desligado: nada */
+    ui_definir_centralizado(1);
+    ui_espaco_vertical(6);              /* ligado: metade da sobra */
+    ui_espaco_vertical(100000);         /* maior que a tela: nada */
+    ui_definir_centralizado(0);
+    conteudo(f, buf, sizeof buf);
+    for (p = buf; *p; p++) n += *p == '\n';
+    ASSERT_EQ_INT(esperado > 0 ? esperado : 0, n);
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
 int main(void)
 {
     ui_init();
@@ -331,5 +511,15 @@ int main(void)
     RUN_TEST(teste_espera_enter_aceita_lf);
     RUN_TEST(teste_espera_enter_tecla_estendida);
     RUN_TEST(teste_espera_enter_eof);
+    RUN_TEST(teste_centralizado_desligado_por_padrao);
+    RUN_TEST(teste_margem_do_bloco);
+    RUN_TEST(teste_caixa_centralizada_no_modo);
+    RUN_TEST(teste_caixa_larga_centralizada_pela_propria_largura);
+    RUN_TEST(teste_texto_alinhado_ao_bloco);
+    RUN_TEST(teste_dica_larga_centralizada_pela_propria_largura);
+    RUN_TEST(teste_mensagem_alinhada_ao_bloco);
+    RUN_TEST(teste_tabela_centralizada);
+    RUN_TEST(teste_tabela_sem_centralizar_mantem_recuo);
+    RUN_TEST(teste_espaco_vertical);
     return tf_resumo("test_ui");
 }

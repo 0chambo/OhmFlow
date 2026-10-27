@@ -28,6 +28,17 @@
 #define TAM_ENTRADA 128
 #define TAM_RES     32
 
+/* Altura aproximada de cada tela (linhas), para a centralização vertical:
+ * título (3) + dicas + perguntas + caixa de feedback (5) + pausa (2) */
+#define ALTURA_NOVO           17
+#define ALTURA_REMOVER        14
+#define ALTURA_LISTAR_BASE    10 /* + uma linha por tipo */
+#define ALTURA_CONSULTAR      12
+#define ALTURA_MOVIMENTO      15 /* retirar e repor */
+#define ALTURA_REINICIALIZAR  17
+#define ALTURA_DIFERENCIAL    10
+#define ALTURA_ENCERRAMENTO   4
+
 /* Larguras das colunas da tabela de estoque: #, Resistência, Quantidade */
 static const int TAB_LARG[] = { 2, 12, 10 };
 static const int TAB_DIR[]  = { 1, 0, 1 };
@@ -66,9 +77,13 @@ static void feedback_cancelado(const char *acao, const char *alvo)
     voltar_ao_menu();
 }
 
-static void abre_tela(const char *titulo)
+/* Limpa a tela e desenha o título. `altura` é a estimativa de linhas da tela
+ * inteira (título, perguntas, feedback e pausa), usada para centralizá-la na
+ * vertical quando o modo centralizado está ligado */
+static void abre_tela(const char *titulo, int altura)
 {
     ui_limpar_tela();
+    ui_espaco_vertical(altura);
     ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, titulo, NULL, NULL, 0, UI_LARGURA);
 }
 
@@ -596,7 +611,7 @@ void tela_inserir(Lista *li)
     char buf[TAM_ENTRADA], txt[TAM_RES];
     int t, tipo = ITEM_INVALIDO, res;
 
-    abre_tela("Novo resistor");
+    abre_tela("Novo resistor", ALTURA_NOVO);
     ui_dica("Formatos aceitos: 220 %s 4k7 %s 4.7k %s 1M %s 470m", UI_PONTO, UI_PONTO,
             UI_PONTO, UI_PONTO);
     ui_dica("Em massa: <resistência> <quantidade> por linha (ex.: 4k7 50)");
@@ -658,7 +673,7 @@ void tela_remover(Lista *li)
     char txt[TAM_RES];
     int qtd;
 
-    abre_tela("Remover tipo de resistor");
+    abre_tela("Remover tipo de resistor", ALTURA_REMOVER);
     ui_dica("(Enter vazio cancela)");
     putchar('\n');
     if (!ler_cadastrado("REMOVER", li, &ohms, txt, &qtd)) return;
@@ -711,7 +726,7 @@ void tela_listar(const Lista *li)
     int indice = 0, tipos = tamanho_lista(li);
     long long pecas = total_pecas(li);
 
-    abre_tela("Estoque atual");
+    abre_tela("Estoque atual", ALTURA_LISTAR_BASE + tipos);
     registra(LOG_INFO, "LISTAR", NULL, "OK", "%d %s %s %lld %s", tipos,
              plural(tipos, "tipo", "tipos"), UI_PONTO, pecas, plural(pecas, "peça", "peças"));
     if (lista_vazia(li)) {
@@ -744,7 +759,7 @@ void tela_consultar(Lista *li)
     char txt[TAM_RES];
     int qtd;
 
-    abre_tela("Consultar estoque");
+    abre_tela("Consultar estoque", ALTURA_CONSULTAR);
     ui_dica("(Enter vazio cancela)");
     putchar('\n');
     if (!ler_resistencia("CONSULTAR", &ohms)) {
@@ -778,7 +793,7 @@ void tela_retirar(Lista *li)
     char txt[TAM_RES];
     int atual, qtd, res;
 
-    abre_tela("Retirar do estoque");
+    abre_tela("Retirar do estoque", ALTURA_MOVIMENTO);
     ui_dica("(Enter vazio cancela)");
     putchar('\n');
     if (!ler_cadastrado("RETIRAR", li, &ohms, txt, &atual)) return;
@@ -820,7 +835,7 @@ void tela_repor(Lista *li)
     char txt[TAM_RES];
     int atual, qtd, res;
 
-    abre_tela("Repor estoque");
+    abre_tela("Repor estoque", ALTURA_MOVIMENTO);
     ui_dica("(Enter vazio cancela)");
     putchar('\n');
     if (!ler_cadastrado("REPOR", li, &ohms, txt, &atual)) return;
@@ -852,7 +867,7 @@ void tela_reinicializar(Lista *li)
     int tipos = tamanho_lista(li);
     long long pecas = total_pecas(li);
 
-    abre_tela("Inicializar / reinicializar");
+    abre_tela("Inicializar / reinicializar", ALTURA_REINICIALIZAR);
     putchar('\n');
     if (lista_vazia(li)) {
         reinicializa_lista(li);
@@ -881,7 +896,7 @@ void tela_reinicializar(Lista *li)
 
 void tela_diferencial(void)
 {
-    abre_tela("Diferencial");
+    abre_tela("Diferencial", ALTURA_DIFERENCIAL);
     registra(LOG_INFO, "DIFERENCIAL", NULL, "EM BREVE", NULL);
     ui_caixa_feedback(UI_INFO, "Em breve", "Funcionalidade diferencial em desenvolvimento");
     voltar_ao_menu();
@@ -903,5 +918,6 @@ void tela_encerramento(const Lista *li)
     linhas[1] = resumo;
     ui_limpar_tela();
     putchar('\n');
+    ui_espaco_vertical(ALTURA_ENCERRAMENTO);
     ui_caixa(UI_MOLDURA_DUPLA, UI_COR_BORDA, NULL, NULL, linhas, 2, UI_LARGURA);
 }

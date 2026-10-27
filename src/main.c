@@ -19,6 +19,7 @@ int main(void)
     int opcao;
 
     ui_init();
+    ui_definir_centralizado(ui_interativo()); /* telas no centro só no terminal */
     estoque = cria_lista(); /* inicialização da lista (vazia) */
     if (estoque == NULL) {
         fprintf(stderr, "Erro: memória insuficiente para criar a lista.\n");

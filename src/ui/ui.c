@@ -41,6 +41,10 @@ static int cor_ativa = 0;      /* emitir códigos ANSI?                         
 static int entrada_tty = 0;    /* stdin é terminal?                             */
 static int saida_tty = 0;      /* stdout é terminal?                            */
 static int vt_ok = 1;          /* terminal entende sequências ANSI?             */
+static int centralizar = 0;    /* telas centralizadas (ui_definir_centralizado) */
+
+static void repete(FILE *out, const char *s, int n);
+static void recuo_texto(FILE *out, size_t largura);
 
 static FILE *saida(void)
 {
@@ -176,6 +180,28 @@ int ui_linhas_terminal(void)
     return linhas > 10 ? linhas : 10;
 }
 
+/* ---- centralização ---------------------------------------------------- */
+
+void ui_definir_centralizado(int ativo) { centralizar = ativo != 0; }
+int  ui_centralizado(void)              { return centralizar; }
+
+int ui_margem(void)
+{
+    int m;
+    if (!centralizar) return 0;
+    m = (ui_colunas_terminal() - (UI_LARGURA + 2)) / 2;
+    return m > 0 ? m : 0;
+}
+
+void ui_espaco_vertical(int altura)
+{
+    int pad;
+    if (!centralizar) return;
+    pad = (ui_linhas_terminal() - altura) / 2;
+    repete(saida(), "\n", pad);
+    fflush(saida());
+}
+
 void ui_cursor(int visivel)
 {
     if (ui_interativo() && vt_ok) {
@@ -243,8 +269,10 @@ void ui_esperar_enter(void)
 void ui_pausar(const char *msg)
 {
     if (!ui_interativo()) return;
-    fprintf(saida(), "\n  %s%s%s", ui_cor(UI_COR_DIM),
-            msg ? msg : "Pressione Enter para continuar...", ui_cor(UI_COR_RESET));
+    if (msg == NULL) msg = "Pressione Enter para continuar...";
+    putc('\n', saida());
+    recuo_texto(saida(), ui_largura(msg));
+    fprintf(saida(), "%s%s%s", ui_cor(UI_COR_DIM), msg, ui_cor(UI_COR_RESET));
     fflush(saida());
     ui_esperar_enter();
     putc('\n', saida());
@@ -389,6 +417,10 @@ void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
               const char *cabecalho, const char *const *linhas, int n,
               int largura_min)
 {
+    if (centralizar) {
+        ui_caixa_centralizada(estilo, cor_borda, titulo_borda, cabecalho, linhas, n, largura_min);
+        return;
+    }
     ui_caixa_com_margem(estilo, cor_borda, titulo_borda, cabecalho, linhas, n, largura_min, 0);
 }
 
@@ -473,6 +505,24 @@ void ui_caixa_feedback(int tipo, const char *titulo, const char *fmt, ...)
 
 /* ---- mensagens de uma linha ------------------------------------------- */
 
+/* Recuo de uma linha de texto com `largura` colunas visíveis: "  " normalmente;
+ * no modo centralizado, alinhada ao texto do bloco central ou, se não couber
+ * nele, centralizada pela própria largura */
+static void recuo_texto(FILE *out, size_t largura)
+{
+    int m;
+    if (!centralizar) {
+        fputs("  ", out);
+        return;
+    }
+    if ((int)largura + 4 <= UI_LARGURA + 2) {
+        repete(out, " ", ui_margem() + 2);
+        return;
+    }
+    m = (ui_colunas_terminal() - (int)largura) / 2;
+    repete(out, " ", m > 0 ? m : 0);
+}
+
 void ui_mensagem(int tipo, const char *fmt, ...)
 {
     char msg[TAM_MSG];
@@ -480,7 +530,8 @@ void ui_mensagem(int tipo, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(msg, sizeof msg, fmt, ap);
     va_end(ap);
-    fprintf(saida(), "  %s%s %s%s\n", ui_cor(cor_do_tipo(tipo)), icone_do_tipo(tipo),
+    recuo_texto(saida(), ui_largura(icone_do_tipo(tipo)) + 1 + ui_largura(msg));
+    fprintf(saida(), "%s%s %s%s\n", ui_cor(cor_do_tipo(tipo)), icone_do_tipo(tipo),
             msg, ui_cor(UI_COR_RESET));
     fflush(saida());
 }
@@ -492,7 +543,8 @@ void ui_dica(const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(msg, sizeof msg, fmt, ap);
     va_end(ap);
-    fprintf(saida(), "  %s%s%s\n", ui_cor(UI_COR_DIM), msg, ui_cor(UI_COR_RESET));
+    recuo_texto(saida(), ui_largura(msg));
+    fprintf(saida(), "%s%s%s\n", ui_cor(UI_COR_DIM), msg, ui_cor(UI_COR_RESET));
 }
 
 /* ---- entrada ---------------------------------------------------------- */
@@ -504,6 +556,8 @@ int ui_ler_linha(const char *prompt, char *buf, size_t n)
 
     if (buf == NULL || n == 0) return 0;
     buf[0] = '\0';
+    if (centralizar) /* alinha com o texto do bloco (sem centralizado: coluna 0) */
+        recuo_texto(out, ui_largura(UI_PROMPT) + 1 + ui_largura(prompt));
     fprintf(out, "%s%s%s %s", ui_cor(UI_COR_PROMPT), UI_PROMPT, ui_cor(UI_COR_RESET),
             prompt ? prompt : "");
     fflush(out);
@@ -550,6 +604,20 @@ int ui_confirmar(const char *fmt, ...)
 
 /* ---- tabelas ---------------------------------------------------------- */
 
+/* Recuo da tabela: "  " normalmente; centralizada pela largura total no modo
+ * centralizado (borda + largura + 2 de respiro + borda, por coluna) */
+static void recuo_tabela(FILE *out, const int *larguras, int ncol)
+{
+    int total = 1, i, m;
+    if (!centralizar) {
+        fputs("  ", out);
+        return;
+    }
+    for (i = 0; i < ncol; i++) total += larguras[i] + 3;
+    m = (ui_colunas_terminal() - total) / 2;
+    repete(out, " ", m > 0 ? m : 0);
+}
+
 void ui_tabela_borda(int pos, const int *larguras, int ncol)
 {
     FILE *out = saida();
@@ -561,7 +629,8 @@ void ui_tabela_borda(int pos, const int *larguras, int ncol)
     case UI_TAB_MEIO: esq = m->ml; meio = m->cx; dir = m->mr; break;
     default:          esq = m->bl; meio = m->bm; dir = m->br; break;
     }
-    fprintf(out, "  %s%s", ui_cor(UI_COR_BORDA), esq);
+    recuo_tabela(out, larguras, ncol);
+    fprintf(out, "%s%s", ui_cor(UI_COR_BORDA), esq);
     for (i = 0; i < ncol; i++) {
         repete(out, m->h, larguras[i] + 2);
         fputs(i + 1 < ncol ? meio : dir, out);
@@ -575,7 +644,8 @@ void ui_tabela_linha(const char *const *celulas, const int *larguras,
     FILE *out = saida();
     const char *cb = ui_cor(UI_COR_BORDA), *rs = ui_cor(UI_COR_RESET);
     int i;
-    fprintf(out, "  %s%s%s", cb, MOLD_SIMPLES.v, rs);
+    recuo_tabela(out, larguras, ncol);
+    fprintf(out, "%s%s%s", cb, MOLD_SIMPLES.v, rs);
     for (i = 0; i < ncol; i++) {
         putc(' ', out);
         ui_pad(out, celulas[i], larguras[i], alinhar_dir ? alinhar_dir[i] : 0);
