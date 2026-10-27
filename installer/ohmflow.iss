@@ -1,14 +1,20 @@
 ﻿; ohmflow.iss — instalador do OhmFlow para o usuário final (Inno Setup 6)
 ;
-; Gera dist\ohm_flow_setup.exe a partir do dist\ohmflow.exe já compilado.
+; Gera dist\ohm_flow_setup.exe a partir do dist\instalador\ohmflow.exe já compilado.
 ; O programa só depende de DLLs do Windows 10/11 (KERNEL32, USER32 e UCRT),
 ; então o setup apenas copia os arquivos, cria atalhos e registra o
 ; desinstalador: nada de MSYS2, gcc ou internet na máquina de quem instala.
 ;
-; Uso: make setup [VERSAO=x.y.z]   (chama: iscc /DVersao=x.y.z installer\ohmflow.iss)
+; Uso: make setup [VERSAO=x.y.z]
+;      (chama: iscc /DVersao=x.y.z /DExeOrigem=dist/instalador/ohmflow.exe installer\ohmflow.iss)
 
 #ifndef Versao
   #define Versao "0.0.0-dev"
+#endif
+; make setup passa o exe compilado com -DOHM_LOGS_APPDATA (logs em
+; %APPDATA%\OhmFlow\logs, já que a pasta de instalação pode não aceitar escrita)
+#ifndef ExeOrigem
+  #define ExeOrigem "dist\ohmflow.exe"
 #endif
 
 [Setup]
@@ -56,7 +62,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "path"; Description: "{cm:TarefaPath}"; GroupDescription: "{cm:GrupoOutras}"; Flags: unchecked
 
 [Files]
-Source: "dist\ohmflow.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ExeOrigem}"; DestDir: "{app}"; DestName: "ohmflow.exe"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 

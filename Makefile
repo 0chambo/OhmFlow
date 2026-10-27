@@ -38,20 +38,23 @@ else
   CHECA_SUBSISTEMA = true
 endif
 
-SRC_LIB   = src/lista.c src/formatacao.c src/ui/ui.c src/ui/telas.c
+SRC_LIB   = src/lista.c src/formatacao.c src/log.c src/ui/ui.c src/ui/telas.c
 SRC_MAIN  = src/main.c
 HEADERS   = $(wildcard src/*.h src/ui/*.h)
 BIN       = $(DIST)/ohmflow$(EXE)
-TESTES    = test_lista test_formatacao test_ui test_telas
+TESTES    = test_lista test_formatacao test_log test_ui test_telas
 TEST_BINS = $(addprefix $(BUILD)/,$(addsuffix $(EXE),$(TESTES)))
 
 E2E_ENTRADA  = tests/e2e/entrada.txt
 E2E_ESPERADO = tests/e2e/esperado.txt
 E2E_SAIDA    = $(BUILD)/e2e_saida.txt
+E2E_LOGS     = $(BUILD)/e2e_logs
 
 ASAN_FLAGS = -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
 
 SETUP = $(DIST)/ohm_flow_setup.exe
+# exe do instalador: igual ao de dev, mas grava os logs em %APPDATA%\OhmFlow\logs
+BIN_SETUP = $(DIST)/instalador/ohmflow$(EXE)
 
 .PHONY: all run test e2e asan cppcheck clean icone setup teste-setup
 
@@ -78,6 +81,10 @@ $(BIN): $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(HEADERS)
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(LDLIBS)
 
+$(BIN_SETUP): $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(HEADERS)
+	mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -DOHM_LOGS_APPDATA -o $@ $(SRC_MAIN) $(SRC_LIB) $(RES_OBJ) $(LDLIBS)
+
 $(BUILD)/test_%$(EXE): tests/test_%.c tests/test_framework.h $(SRC_LIB) $(HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Itests -o $@ $< $(SRC_LIB) $(LDLIBS)
 
@@ -89,14 +96,26 @@ test: $(TEST_BINS)
 
 # Roda o binário real com a entrada roteirizada e confere, EM ORDEM, cada linha
 # de esperado.txt contra a saída (linhas vazias de esperado.txt são ignoradas).
+# Os logs vão para $(E2E_LOGS) e são conferidos no fim (cabeçalho, ação, rodapé).
 e2e: $(BIN) | $(BUILD)
 	@$(CHECA_SUBSISTEMA)
-	@NO_COLOR=1 ./$(BIN) < $(E2E_ENTRADA) > $(E2E_SAIDA) 2>&1 || { echo "E2E FALHOU: programa saiu com erro"; exit 1; }
+	@rm -rf $(E2E_LOGS)
+	@NO_COLOR=1 OHMFLOW_LOGS_DIR=$(E2E_LOGS) ./$(BIN) < $(E2E_ENTRADA) > $(E2E_SAIDA) 2>&1 || { echo "E2E FALHOU: programa saiu com erro"; exit 1; }
 	@awk 'NR==FNR { sub(/\r$$/, ""); if (length($$0)) esp[++n] = $$0; next } \
 	     { sub(/\r$$/, ""); if (i < n && index($$0, esp[i+1])) i++ } \
 	     END { if (i < n) { print "E2E FALHOU: nao encontrado (em ordem): " esp[i+1]; \
 	                        print "Saida completa em $(E2E_SAIDA)"; exit 1 } \
 	           print "E2E OK (" n " verificacoes)" }' $(E2E_ESPERADO) $(E2E_SAIDA)
+	@log="$$(ls $(E2E_LOGS)/ohmflow_*.log 2>/dev/null | head -1)"; \
+	[ -n "$$log" ] || { echo "E2E FALHOU: log nao criado em $(E2E_LOGS)"; exit 1; }; \
+	for trecho in 'sessão iniciada em' \
+	              '| INFO  | INSERIR       | 4,7 kΩ     | qtd 10               | OK' \
+	              '| AVISO | RETIRAR       | 4,7 kΩ     | -100 (tem 7)         | SEM ESTOQUE' \
+	              '| ERRO  | INSERIR       | "abc"' \
+	              'sessão encerrada em'; do \
+	  grep -qF -- "$$trecho" "$$log" || { echo "E2E FALHOU: log sem: $$trecho (veja $$log)"; exit 1; }; \
+	done; \
+	echo "E2E LOG OK ($$log)"
 
 asan:
 	$(MAKE) BUILD=$(BUILD)/asan DIST=$(BUILD)/asan EXTRA_CFLAGS="$(EXTRA_CFLAGS) $(ASAN_FLAGS)" test e2e
@@ -105,14 +124,14 @@ asan:
 # pastas padrão (Arquivos de Programas ou %LOCALAPPDATA%\Programs, onde o winget
 # instala por usuário). MSYS2_ARG_CONV_EXCL impede o MSYS de converter /Q e
 # /DVersao=... em caminhos.
-setup: $(BIN)
+setup: $(BIN_SETUP)
 	@iscc="$$(command -v iscc 2>/dev/null)"; \
 	for c in "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
 	         "$$(cygpath -u "$$LOCALAPPDATA" 2>/dev/null)/Programs/Inno Setup 6/ISCC.exe"; do \
 	  if [ -z "$$iscc" ] && [ -f "$$c" ]; then iscc="$$c"; fi; \
 	done; \
 	[ -n "$$iscc" ] || { echo "SETUP FALHOU: ISCC.exe (Inno Setup 6) nao encontrado. Instale com: winget install JRSoftware.InnoSetup"; exit 1; }; \
-	MSYS2_ARG_CONV_EXCL='*' "$$iscc" /Q /DVersao=$(VERSAO) installer/ohmflow.iss
+	MSYS2_ARG_CONV_EXCL='*' "$$iscc" /Q /DVersao=$(VERSAO) /DExeOrigem=$(BIN_SETUP) installer/ohmflow.iss
 	@echo "Instalador gerado: $(SETUP)"
 
 teste-setup: setup

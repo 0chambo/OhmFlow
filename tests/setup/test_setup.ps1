@@ -41,22 +41,37 @@ foreach ($arq in 'ohmflow.exe', 'README.md', 'LICENSE', 'unins000.exe') {
     Confere (Test-Path (Join-Path $destino $arq)) "arquivo ausente apos instalar: $arq"
 }
 
-# 4. O programa instalado roda o roteiro do e2e ate o fim
+# 4. O programa instalado roda o roteiro do e2e ate o fim. APPDATA aponta para
+#    uma pasta temporaria: os logs reais do usuario nao sao tocados
+$appdataOriginal = $env:APPDATA
+$appdataTeste = Join-Path ([IO.Path]::GetTempPath()) ("ohmflow_teste_appdata_" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory $appdataTeste | Out-Null
+$env:APPDATA = $appdataTeste
 $env:NO_COLOR = '1'
 $p = Start-Process -FilePath (Join-Path $destino 'ohmflow.exe') -Wait -PassThru -NoNewWindow `
     -RedirectStandardInput $entrada -RedirectStandardOutput $saida
 Remove-Item Env:\NO_COLOR
+$env:APPDATA = $appdataOriginal
 Confere ($p.ExitCode -eq 0) "ohmflow.exe instalado saiu com codigo $($p.ExitCode)"
 $texto = Get-Content -Raw -Encoding UTF8 $saida
 Confere ($texto -match 'Obrigado por usar o OhmFlow') "saida do programa instalado sem a tela de encerramento (veja $saida)"
 Remove-Item $saida
 
-# 5. Registro de desinstalacao (aparece em "Aplicativos instalados")
+# 5. O exe do instalador grava os logs em %APPDATA%\OhmFlow\logs
+$logs = @(Get-ChildItem (Join-Path $appdataTeste 'OhmFlow\logs') -Filter 'ohmflow_*.log' -ErrorAction SilentlyContinue)
+Confere ($logs.Count -eq 1) "log do dia ausente em $appdataTeste\OhmFlow\logs"
+$log = Get-Content -Raw -Encoding UTF8 $logs[0].FullName
+Confere ($log -match '\| INSERIR ') "log sem a acao INSERIR: $($logs[0].FullName)"
+Confere ($log -match 'encerrada em') "log sem o rodape da sessao: $($logs[0].FullName)"
+Confere (-not (Test-Path (Join-Path $destino 'logs'))) "exe instalado criou logs na pasta de instalacao"
+Remove-Item -Recurse -Force $appdataTeste
+
+# 6. Registro de desinstalacao (aparece em "Aplicativos instalados")
 Confere (Test-Path $chave) "chave de desinstalacao ausente: $chave"
 $nome = (Get-ItemProperty $chave).DisplayName
 Confere ($nome -like 'OhmFlow*') "DisplayName inesperado: '$nome'"
 
-# 6. Desinstalacao silenciosa remove pasta e chave
+# 7. Desinstalacao silenciosa remove pasta e chave
 $p = Start-Process -FilePath (Join-Path $destino 'unins000.exe') -Wait -PassThru `
     -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
 Confere ($p.ExitCode -eq 0) "desinstalacao saiu com codigo $($p.ExitCode)"
