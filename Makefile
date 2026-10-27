@@ -42,7 +42,7 @@ SRC_LIB   = src/lista.c src/formatacao.c src/log.c src/ui/ui.c src/ui/telas.c
 SRC_MAIN  = src/main.c
 HEADERS   = $(wildcard src/*.h src/ui/*.h)
 BIN       = $(DIST)/ohmflow$(EXE)
-TESTES    = test_lista test_formatacao test_log test_ui test_telas
+TESTES    = test_lista test_formatacao test_log test_ui test_telas test_novo
 TEST_BINS = $(addprefix $(BUILD)/,$(addsuffix $(EXE),$(TESTES)))
 
 E2E_ENTRADA  = tests/e2e/entrada.txt
@@ -109,9 +109,10 @@ e2e: $(BIN) | $(BUILD)
 	@log="$$(ls $(E2E_LOGS)/ohmflow_*.log 2>/dev/null | head -1)"; \
 	[ -n "$$log" ] || { echo "E2E FALHOU: log nao criado em $(E2E_LOGS)"; exit 1; }; \
 	for trecho in 'sessão iniciada em' \
-	              '| INFO  | INSERIR       | 4,7 kΩ     | qtd 10               | OK' \
+	              '| INFO  | NOVO          | 4,7 kΩ     | qtd 10               | OK' \
 	              '| AVISO | RETIRAR       | 4,7 kΩ     | -100 (tem 7)         | SEM ESTOQUE' \
-	              '| ERRO  | INSERIR       | "abc"' \
+	              '| ERRO  | NOVO          | "abc"' \
+	              '| INFO  | NOVO          | -          | 3 ok · 1 dup · 1 inv | LOTE CONCLUÍDO' \
 	              'sessão encerrada em'; do \
 	  grep -qF -- "$$trecho" "$$log" || { echo "E2E FALHOU: log sem: $$trecho (veja $$log)"; exit 1; }; \
 	done; \

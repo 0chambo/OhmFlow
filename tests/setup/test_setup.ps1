@@ -61,7 +61,7 @@ Remove-Item $saida
 $logs = @(Get-ChildItem (Join-Path $appdataTeste 'OhmFlow\logs') -Filter 'ohmflow_*.log' -ErrorAction SilentlyContinue)
 Confere ($logs.Count -eq 1) "log do dia ausente em $appdataTeste\OhmFlow\logs"
 $log = Get-Content -Raw -Encoding UTF8 $logs[0].FullName
-Confere ($log -match '\| INSERIR ') "log sem a acao INSERIR: $($logs[0].FullName)"
+Confere ($log -match '\| NOVO ') "log sem a acao NOVO: $($logs[0].FullName)"
 Confere ($log -match 'encerrada em') "log sem o rodape da sessao: $($logs[0].FullName)"
 Confere (-not (Test-Path (Join-Path $destino 'logs'))) "exe instalado criou logs na pasta de instalacao"
 Remove-Item -Recurse -Force $appdataTeste

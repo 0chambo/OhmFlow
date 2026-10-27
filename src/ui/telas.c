@@ -72,22 +72,43 @@ static void abre_tela(const char *titulo)
     ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, titulo, NULL, NULL, 0, UI_LARGURA);
 }
 
+#define MSG_VALOR_INVALIDO "Valor inválido. Exemplos: 220, 4k7, 4.7k, 1M, 470m " \
+                           "(faixa 1 m" SIMBOLO_OHM " a 1000 M" SIMBOLO_OHM ")"
+
+/* Registra no log uma entrada que não é uma resistência válida */
+static void registra_invalido(const char *acao, const char *entrada)
+{
+    char citado[40];
+    snprintf(citado, sizeof citado, "\"%.24s\"", entrada);
+    registra(LOG_ERRO, acao, citado, "VALOR INVÁLIDO", NULL);
+}
+
 /* Lê uma resistência; 0 se cancelado (vazio/EOF) ou após TENTATIVAS inválidas.
  * Cada entrada inválida vai para o log como ERRO da `acao` */
 static int ler_resistencia(const char *acao, double *ohms)
 {
-    char buf[TAM_ENTRADA], citado[40];
+    char buf[TAM_ENTRADA];
     int t;
     for (t = 0; t < TENTATIVAS; t++) {
         if (!ui_ler_linha("Resistência: ", buf, sizeof buf) || buf[0] == '\0')
             return 0;
         if (parse_resistencia(buf, ohms)) return 1;
-        snprintf(citado, sizeof citado, "\"%.24s\"", buf);
-        registra(LOG_ERRO, acao, citado, "VALOR INVÁLIDO", NULL);
-        ui_mensagem(UI_ERRO, "Valor inválido. Exemplos: 220, 4k7, 4.7k, 1M, 470m "
-                    "(faixa 1 m" SIMBOLO_OHM " a 1000 M" SIMBOLO_OHM ")");
+        registra_invalido(acao, buf);
+        ui_mensagem(UI_ERRO, MSG_VALOR_INVALIDO);
     }
     return 0;
+}
+
+/* 1 se s é um inteiro em [minimo, INT_MAX] (grava em *qtd), 0 caso contrário */
+static int parse_quantidade(const char *s, int minimo, int *qtd)
+{
+    char *fim;
+    long long v; /* long long: maior que int em qualquer plataforma */
+    errno = 0;
+    v = strtoll(s, &fim, 10);
+    if (s[0] == '\0' || errno != 0 || *fim != '\0' || v < minimo || v > INT_MAX) return 0;
+    *qtd = (int)v;
+    return 1;
 }
 
 /* Lê um inteiro em [minimo, INT_MAX]; 0 se cancelado. Entradas inválidas vão
@@ -96,22 +117,29 @@ static int ler_quantidade(const char *acao, const char *alvo, const char *prompt
                           int minimo, int *qtd)
 {
     char buf[TAM_ENTRADA];
-    char *fim;
     int t;
     for (t = 0; t < TENTATIVAS; t++) {
-        long long v; /* long long: maior que int em qualquer plataforma */
         if (!ui_ler_linha(prompt, buf, sizeof buf) || buf[0] == '\0') return 0;
-        errno = 0;
-        v = strtoll(buf, &fim, 10);
-        if (errno == 0 && *fim == '\0' && v >= minimo && v <= INT_MAX) {
-            *qtd = (int)v;
-            return 1;
-        }
+        if (parse_quantidade(buf, minimo, qtd)) return 1;
         registra(LOG_ERRO, acao, alvo, "QUANTIDADE INVÁLIDA", "\"%.20s\"", buf);
         ui_mensagem(UI_ERRO, "Quantidade inválida: informe um inteiro de %d a %d.",
                     minimo, INT_MAX);
     }
     return 0;
+}
+
+int parse_item(const char *s, Resistor *r)
+{
+    /* larguras de %s = TAM_ENTRADA - 1; s mais curto que TAM_ENTRADA cabe inteiro */
+    char res[TAM_ENTRADA], qtd[TAM_ENTRADA], resto[2];
+    int campos;
+    if (s == NULL || r == NULL || strlen(s) >= TAM_ENTRADA) return ITEM_INVALIDO;
+    campos = sscanf(s, "%127s %127s %1s", res, qtd, resto);
+    if ((campos != 1 && campos != 2) || !parse_resistencia(res, &r->resistencia))
+        return ITEM_INVALIDO;
+    r->quantidade = 0;
+    if (campos == 1) return ITEM_SO_RESISTENCIA;
+    return parse_quantidade(qtd, 0, &r->quantidade) ? ITEM_COMPLETO : ITEM_INVALIDO;
 }
 
 /* Lê a resistência e garante que ela está cadastrada; preenche texto e qtd */
@@ -130,16 +158,6 @@ static int ler_cadastrado(const char *acao, Lista *li, double *ohms, char *txt, 
         return 0;
     }
     return 1;
-}
-
-static int cor_grandeza(int g)
-{
-    switch (g) {
-    case GRANDEZA_MILI:    return UI_COR_MAGENTA;
-    case GRANDEZA_UNIDADE: return UI_COR_BRANCO;
-    case GRANDEZA_KILO:    return UI_COR_CIANO;
-    default:               return UI_COR_AZUL;
-    }
 }
 
 /* ---- [1] boas-vindas -------------------------------------------------- */
@@ -196,11 +214,10 @@ void tela_boas_vindas(void)
         printf("%*s%s\xc2\xbb%s %s%s%s\n", m_esq, "", neon, rs, dim, MSG, rs);
     }
 
-    /* Aguarda Enter sem imprimir texto extra */
+    /* Aguarda Enter sem ecoar o que for digitado */
     if (ui_interativo()) {
-        char lixo[8];
         fflush(stdout);
-        while (fgets(lixo, sizeof lixo, stdin) && !strchr(lixo, '\n')) ;
+        ui_esperar_enter();
     }
 }
 
@@ -391,7 +408,7 @@ int menu_tecla_opcao(int tecla, int selecao)
 void desenha_menu(const Lista *li, int selecao)
 {
     static const char *const ROTULOS[OPCAO_TOTAL] = {
-        "Sair", "Inserir", "Remover", "Listar", "Consultar",
+        "Sair", "Novo", "Remover", "Listar", "Consultar",
         "Retirar", "Repor", "Reinicializar", "(diferencial)"
     };
     char linhas[6][160];
@@ -504,42 +521,125 @@ int tela_menu(const Lista *li)
     }
 }
 
-/* ---- [3]+[4] inserir --------------------------------------------------- */
+/* ---- [3]+[4] novo (unitário ou em massa) ------------------------------- */
+
+/* Contadores da inserção em massa */
+typedef struct {
+    int inseridos, duplicados, invalidos;
+} Lote;
+
+/* Insere um item do lote, conta o resultado e mostra uma linha de feedback */
+static void insere_do_lote(Lista *li, Resistor r, Lote *lote)
+{
+    char txt[TAM_RES];
+    int res = insere_lista_ordenada(li, r);
+    formata_resistencia(r.resistencia, txt, sizeof txt);
+    if (res == LISTA_OK) {
+        lote->inseridos++;
+        registra(LOG_INFO, "NOVO", txt, "OK", "qtd %d (lote)", r.quantidade);
+        ui_mensagem(UI_SUCESSO, "%s inserido (%d un.)", txt, r.quantidade);
+    } else if (res == LISTA_DUPLICADO) {
+        lote->duplicados++;
+        registra(LOG_AVISO, "NOVO", txt, "JÁ CADASTRADO", "(lote)");
+        ui_mensagem(UI_AVISO, "%s já cadastrado - ignorado", txt);
+    } else {
+        lote->invalidos++;
+        registra(LOG_ERRO, "NOVO", txt, res == LISTA_ERRO ? "SEM MEMÓRIA" : "VALOR INVÁLIDO",
+                 "(lote)");
+        ui_mensagem(UI_ERRO, "%s: %s", txt,
+                    res == LISTA_ERRO ? "memória insuficiente" : "valor inválido");
+    }
+}
+
+/* Uma linha "<resistência> <quantidade>" por item até Enter vazio (ou fim da
+ * entrada). Duplicados e inválidos não interrompem: entram no resumo final. */
+static void inserir_em_massa(Lista *li, Resistor primeiro)
+{
+    Lote lote = { 0, 0, 0 };
+    char buf[TAM_ENTRADA];
+
+    insere_do_lote(li, primeiro, &lote);
+    while (ui_ler_linha("Resistência [quantidade]: ", buf, sizeof buf) && buf[0] != '\0') {
+        Resistor r;
+        int tipo = parse_item(buf, &r);
+        if (tipo == ITEM_INVALIDO) {
+            lote.invalidos++;
+            registra_invalido("NOVO", buf);
+            ui_mensagem(UI_ERRO, "Linha inválida: \"%s\"", buf);
+            continue;
+        }
+        /* só a resistência: pede a quantidade (duplicado nem chega a perguntar) */
+        if (tipo == ITEM_SO_RESISTENCIA && consulta_lista(li, r.resistencia, NULL) != LISTA_OK) {
+            char txt[TAM_RES];
+            formata_resistencia(r.resistencia, txt, sizeof txt);
+            if (!ler_quantidade("NOVO", txt, "Quantidade : ", 0, &r.quantidade)) {
+                lote.invalidos++;
+                registra(LOG_AVISO, "NOVO", txt, "SEM QUANTIDADE", "(lote)");
+                ui_mensagem(UI_ERRO, "Item sem quantidade ignorado");
+                continue;
+            }
+        }
+        insere_do_lote(li, r, &lote);
+    }
+
+    registra(LOG_INFO, "NOVO", NULL, "LOTE CONCLUÍDO", "%d ok %s %d dup %s %d inv",
+             lote.inseridos, UI_PONTO, lote.duplicados, UI_PONTO, lote.invalidos);
+    ui_caixa_feedback(lote.inseridos > 0 ? UI_SUCESSO : UI_AVISO, "Inserção em massa concluída",
+                      "Inseridos : %d\nDuplicados: %d\nInválidos : %d",
+                      lote.inseridos, lote.duplicados, lote.invalidos);
+    voltar_ao_menu();
+}
 
 void tela_inserir(Lista *li)
 {
     Resistor r;
-    char txt[TAM_RES];
-    int res;
+    char buf[TAM_ENTRADA], txt[TAM_RES];
+    int t, tipo = ITEM_INVALIDO, res;
 
-    abre_tela("Inserir novo resistor");
+    abre_tela("Novo resistor");
     ui_dica("Formatos aceitos: 220 %s 4k7 %s 4.7k %s 1M %s 470m", UI_PONTO, UI_PONTO,
             UI_PONTO, UI_PONTO);
-    ui_dica("(Enter vazio cancela)");
+    ui_dica("Em massa: <resistência> <quantidade> por linha (ex.: 4k7 50)");
+    ui_dica("(Enter vazio cancela; em massa, encerra a lista)");
     putchar('\n');
 
-    if (!ler_resistencia("INSERIR", &r.resistencia)) {
-        feedback_cancelado("INSERIR", NULL);
+    /* A primeira linha decide o modo: só a resistência -> um item, com a
+     * quantidade perguntada em seguida; resistência e quantidade -> em massa */
+    for (t = 0; t < TENTATIVAS && tipo == ITEM_INVALIDO; t++) {
+        if (!ui_ler_linha("Resistência: ", buf, sizeof buf) || buf[0] == '\0') break;
+        tipo = parse_item(buf, &r);
+        if (tipo == ITEM_INVALIDO) {
+            registra_invalido("NOVO", buf);
+            ui_mensagem(UI_ERRO, MSG_VALOR_INVALIDO);
+        }
+    }
+    if (tipo == ITEM_INVALIDO) {
+        feedback_cancelado("NOVO", NULL);
         return;
     }
+    if (tipo == ITEM_COMPLETO) {
+        inserir_em_massa(li, r);
+        return;
+    }
+
     formata_resistencia(r.resistencia, txt, sizeof txt);
     if (consulta_lista(li, r.resistencia, NULL) == LISTA_OK) {
-        registra(LOG_AVISO, "INSERIR", txt, "JÁ CADASTRADO", NULL);
+        registra(LOG_AVISO, "NOVO", txt, "JÁ CADASTRADO", NULL);
         ui_caixa_feedback(UI_ERRO, "Resistor já cadastrado",
                           "%s já cadastrado - use [6] Repor", txt);
         voltar_ao_menu();
         return;
     }
-    if (!ler_quantidade("INSERIR", txt, "Quantidade : ", 0, &r.quantidade)) {
-        feedback_cancelado("INSERIR", txt);
+    if (!ler_quantidade("NOVO", txt, "Quantidade : ", 0, &r.quantidade)) {
+        feedback_cancelado("NOVO", txt);
         return;
     }
 
     res = insere_lista_ordenada(li, r);
     if (res == LISTA_OK)
-        registra(LOG_INFO, "INSERIR", txt, "OK", "qtd %d", r.quantidade);
+        registra(LOG_INFO, "NOVO", txt, "OK", "qtd %d", r.quantidade);
     else
-        registra(LOG_ERRO, "INSERIR", txt,
+        registra(LOG_ERRO, "NOVO", txt,
                  res == LISTA_ERRO ? "SEM MEMÓRIA" : "VALOR INVÁLIDO", "qtd %d", r.quantidade);
     if (res == LISTA_OK)
         ui_caixa_feedback(UI_SUCESSO, "Resistor inserido",
@@ -592,8 +692,8 @@ static void linha_estoque(const Resistor *r, void *ctx)
     if (espaco != NULL) *espaco = '\0';
 
     snprintf(c_idx, sizeof c_idx, "%d", ++*indice);
-    snprintf(c_res, sizeof c_res, "%s%7s %s%s", ui_cor(cor_grandeza(grandeza_resistencia(r->resistencia))),
-             txt, espaco ? espaco + 1 : "", ui_cor(UI_COR_RESET));
+    /* valor no texto padrão: só a moldura da tabela é colorida */
+    snprintf(c_res, sizeof c_res, "%7s %s", txt, espaco ? espaco + 1 : "");
     snprintf(c_qtd, sizeof c_qtd, "%s%d%s", r->quantidade == 0 ? ui_cor(UI_COR_VERMELHO) : "",
              r->quantidade, ui_cor(UI_COR_RESET));
 
@@ -615,7 +715,7 @@ void tela_listar(const Lista *li)
     registra(LOG_INFO, "LISTAR", NULL, "OK", "%d %s %s %lld %s", tipos,
              plural(tipos, "tipo", "tipos"), UI_PONTO, pecas, plural(pecas, "peça", "peças"));
     if (lista_vazia(li)) {
-        ui_mensagem(UI_INFO, "Estoque vazio. Use [1] Inserir.");
+        ui_mensagem(UI_INFO, "Estoque vazio. Use [1] Novo.");
         voltar_ao_menu();
         return;
     }
@@ -666,11 +766,6 @@ void tela_consultar(Lista *li)
     } else {
         registra(LOG_AVISO, "CONSULTAR", txt, "NÃO ENCONTRADO", NULL);
         ui_mensagem(UI_ERRO, "%s não está no estoque", txt);
-    }
-    /* a lista ordenada para no primeiro nó >= valor procurado */
-    {
-        int passos = lista_passos(li);
-        ui_dica("Busca: %d %s", passos, plural(passos, "nó visitado", "nós visitados"));
     }
     voltar_ao_menu();
 }
@@ -766,6 +861,8 @@ void tela_reinicializar(Lista *li)
         voltar_ao_menu();
         return;
     }
+    ui_caixa_feedback(UI_AVISO, "Tem certeza disso, você está apagando sua base de dados.",
+                      NULL);
     if (!ui_confirmar("Apagar TODOS os %d %s (%lld %s)?", tipos, plural(tipos, "tipo", "tipos"),
                       pecas, plural(pecas, "peça", "peças"))) {
         feedback_cancelado("REINICIALIZAR", NULL);

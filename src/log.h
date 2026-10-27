@@ -6,7 +6,7 @@
  * a duração ao encerrar. Linha de ação (colunas de largura fixa, separadas
  * por " | ", fáceis de ler e de quebrar depois na tela de Histórico):
  *
- *   27/10/2026 14:03:20 | INFO  | INSERIR       | 4,7 kΩ     | qtd 50               | OK
+ *   27/10/2026 14:03:20 | INFO  | NOVO          | 4,7 kΩ     | qtd 50               | OK
  *
  * Pasta dos logs: OHMFLOW_LOGS_DIR, se definida; senão %APPDATA%\OhmFlow\logs
  * no build do instalador (-DOHM_LOGS_APPDATA); senão .\logs (desenvolvimento).
