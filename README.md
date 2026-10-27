@@ -38,7 +38,7 @@ O programa depende só de DLLs que já vêm no Windows 10/11 (`KERNEL32`, `USER3
 | 6 | Repor | soma uma quantidade ao estoque |
 | 7 | Inicializar/Reinicializar | esvazia a lista, com aviso e confirmação |
 | 8 | Diferencial | a definir |
-| 9 | Histórico | últimas 15 ações (dos logs dos últimos 30 dias), mais recentes primeiro |
+| 9 | Histórico | últimas 15 ações (dos logs dos últimos 30 dias), mais recentes primeiro, e **checkpoint**: volta o estoque a qualquer ponto da sessão atual e avança de novo (desfazer/refazer) |
 | `Esc` / `0` | Sair | encerra o programa e libera a memória |
 
 ### Novo: um item ou vários de uma vez
@@ -92,6 +92,8 @@ Atenção: `m` minúsculo é mili e `M` maiúsculo é mega. A faixa aceita vai d
 ```text
 src/
 ├── lista.h / lista.c             TAD lista dinâmica ordenada (chave: resistência)
+├── pilha.h / pilha.c             TAD pilha dinâmica de operações (base do checkpoint)
+├── checkpoint.h / checkpoint.c   desfazer/refazer com duas pilhas (só a sessão atual)
 ├── formatacao.h / formatacao.c   leitura "4k7" -> Ω e impressão por grandeza
 ├── log.h / log.c                 registro das ações em logs/ohmflow_AAAA-MM-DD.log
 ├── main.c                        cria a lista, abre/fecha a sessão de log e conduz as telas
@@ -101,10 +103,12 @@ src/
 tests/
 ├── test_framework.h              mini framework de testes (sem dependências)
 ├── test_lista.c                  testes da lista
+├── test_pilha.c                  testes da pilha (LIFO, posse e liberação dos itens)
+├── test_checkpoint.c             testes do desfazer/refazer (cada inversa, ir para um ponto)
 ├── test_formatacao.c             testes de parse e formatação
 ├── test_log.c                    testes do log (formato, sessão, falhas de I/O)
 ├── test_ui.c                     testes de alinhamento, cores e espera por Enter
-├── test_telas.c                  testes da navegação do menu
+├── test_telas.c                  testes da navegação do menu e da tela de checkpoint
 ├── test_novo.c                   testes da tela Novo (parse_item, inserção em massa) e ajustes de tela
 └── e2e/                          teste ponta a ponta: entrada simulada e saída esperada
 ```
@@ -314,6 +318,31 @@ Detalhes:
 | Reinicializar | `reinicializa_lista` dá `free` em todos os nós, deixa `inicio` em `NULL` e zera os totais |
 | Sair | `libera_lista` libera todos os nós e o próprio descritor |
 
+### Checkpoint: voltar e avançar no histórico (pilhas)
+
+Cada ação que muda o estoque (Novo, Remover, Retirar, Repor, Reinicializar) é empilhada como uma `Operacao` com o necessário para desfazê-la. O checkpoint usa **duas pilhas dinâmicas** (`pilha.h`):
+
+| Pilha | Guarda | Topo |
+| --- | --- | --- |
+| desfazer | ações aplicadas | a mais recente |
+| refazer | ações desfeitas | a próxima a refazer |
+
+- **Voltar** um passo: desempilha de *desfazer*, aplica a inversa na lista e empilha em *refazer*. **Avançar** faz o caminho contrário.
+- **Ir para o ponto N** repete isso até a pilha de desfazer ter N ações (0 = início da sessão).
+- Uma ação nova depois de voltar **esvazia** a pilha de refazer (o "futuro" desfeito deixa de valer).
+
+| Ação | Desfazer | Refazer |
+| --- | --- | --- |
+| Novo (um item ou o lote inteiro, em um passo) | remove os itens | insere de novo |
+| Remover | reinsere com a quantidade que tinha | remove |
+| Retirar *q* | repõe *q* | retira *q* |
+| Repor *q* | retira *q* | repõe *q* |
+| Reinicializar | reinsere a foto do estoque tirada antes de apagar | esvazia |
+
+Vale só para a **sessão atual**: o estoque não é salvo entre execuções. Desfazer/refazer não leem o log (que guarda valores já formatados), e sim os dados exatos em Ω guardados na pilha. Cada passo vai para o log como `DESFAZER`/`REFAZER`, mais uma linha `CHECKPOINT` com o salto (`ponto 11 → 9`).
+
+No menu **[9] Histórico**, abaixo da tabela dos logs: `C` abre a linha do tempo da sessão (mais recente em cima, ações desfeitas em cinza, `» atual` na posição atual); `↑↓`/`WS` escolhem o ponto, `Enter` vai até ele e `Esc` volta sem mudar nada. Sem terminal (e2e), a linha do tempo é impressa e o programa pergunta o número do ponto.
+
 ### Chave de ordenação exata
 
 O texto digitado é convertido para Ω por um único `strtod` sobre a forma decimal com expoente (`"470m"` vira `"470.0e-3"`). Assim, grafias diferentes do mesmo valor (`470m`, `0.47`, `0,47`) geram exatamente o mesmo `double`. Multiplicar por `0,001` não garantia isso, porque esse número não é exato em binário. A comparação com tolerância (`mesma_resistencia`) continua como rede de segurança.
@@ -491,7 +520,7 @@ make clean; make EXTRA_CFLAGS=-Werror all test e2e cppcheck
 
 O GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push ou pull request em `main` e `Grolla`, num único job **Windows** (`windows-latest`, MSYS2 UCRT64): `make all test e2e` com `-Werror`, a checagem de subsistema console, `make cppcheck` e `make teste-setup` (instalador gerado e testado).
 
-O ícone `src/assets/ohmflow.ico` é versionado, então o build não precisa de Python. Se trocar o `logo.png`, regenere o ícone com `make icone` (requer Python com Pillow) e faça commit do `.ico`.
+O ícone `src/assets/logo/ohmflow.ico` é versionado, então o build não precisa de Python. Se trocar o `logo.png`, regenere o ícone com `make icone` (requer Python com Pillow) e faça commit do `.ico`.
 
 ## Referência
 

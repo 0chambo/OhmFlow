@@ -49,6 +49,11 @@ static const int HIST_LARG[] = { 11, 13, 10, 16, 14 };
 static const int TAB_LARG[] = { 2, 12, 10 };
 static const int TAB_DIR[]  = { 1, 0, 1 };
 
+/* Checkpoint da sessão (telas_definir_checkpoint); NULL = não registra */
+static Checkpoint *checkpoint = NULL;
+
+void telas_definir_checkpoint(Checkpoint *ck) { checkpoint = ck; }
+
 /* ---- auxiliares ------------------------------------------------------- */
 
 static const char *plural(long long n, const char *singular, const char *plur)
@@ -545,10 +550,27 @@ int tela_menu(const Lista *li)
 
 /* ---- [3]+[4] novo (unitário ou em massa) ------------------------------- */
 
-/* Contadores da inserção em massa */
+/* Contadores da inserção em massa e itens inseridos (para o checkpoint
+ * desfazer o lote inteiro de uma vez) */
 typedef struct {
     int inseridos, duplicados, invalidos;
+    Resistor *ok;      /* itens que deram LISTA_OK            */
+    int       cap_ok;  /* capacidade de `ok`                  */
+    int       sem_ck;  /* faltou memória para guardar um item */
 } Lote;
+
+/* Guarda r em lote->ok, dobrando o vetor quando enche */
+static void guarda_no_lote(Lote *lote, Resistor r)
+{
+    if (lote->inseridos > lote->cap_ok) {
+        int cap = lote->cap_ok ? lote->cap_ok * 2 : 8;
+        Resistor *novo = realloc(lote->ok, (size_t)cap * sizeof *novo);
+        if (novo == NULL) { lote->sem_ck = 1; return; }
+        lote->ok = novo;
+        lote->cap_ok = cap;
+    }
+    lote->ok[lote->inseridos - 1] = r;
+}
 
 /* Insere um item do lote, conta o resultado e mostra uma linha de feedback */
 static void insere_do_lote(Lista *li, Resistor r, Lote *lote)
@@ -558,6 +580,7 @@ static void insere_do_lote(Lista *li, Resistor r, Lote *lote)
     formata_resistencia(r.resistencia, txt, sizeof txt);
     if (res == LISTA_OK) {
         lote->inseridos++;
+        if (!lote->sem_ck) guarda_no_lote(lote, r);
         registra(LOG_INFO, "NOVO", txt, "OK", "qtd %d (lote)", r.quantidade);
         ui_mensagem(UI_SUCESSO, "%s inserido (%d un.)", txt, r.quantidade);
     } else if (res == LISTA_DUPLICADO) {
@@ -577,7 +600,7 @@ static void insere_do_lote(Lista *li, Resistor r, Lote *lote)
  * entrada). Duplicados e inválidos não interrompem: entram no resumo final. */
 static void inserir_em_massa(Lista *li, Resistor primeiro)
 {
-    Lote lote = { 0, 0, 0 };
+    Lote lote = { 0, 0, 0, NULL, 0, 0 };
     char buf[TAM_ENTRADA];
 
     insere_do_lote(li, primeiro, &lote);
@@ -603,6 +626,12 @@ static void inserir_em_massa(Lista *li, Resistor primeiro)
         }
         insere_do_lote(li, r, &lote);
     }
+
+    /* o lote vira UMA ação no checkpoint; se um item não pôde ser guardado,
+     * o histórico não bate mais com o estoque e é descartado */
+    if (lote.sem_ck) ck_descarta(checkpoint);
+    else if (lote.inseridos > 0) ck_registra_novo(checkpoint, lote.ok, lote.inseridos);
+    free(lote.ok);
 
     registra(LOG_INFO, "NOVO", NULL, "LOTE CONCLUÍDO", "%d ok %s %d dup %s %d inv",
              lote.inseridos, UI_PONTO, lote.duplicados, UI_PONTO, lote.invalidos);
@@ -658,8 +687,10 @@ void tela_inserir(Lista *li)
     }
 
     res = insere_lista_ordenada(li, r);
-    if (res == LISTA_OK)
+    if (res == LISTA_OK) {
+        ck_registra_novo(checkpoint, &r, 1);
         registra(LOG_INFO, "NOVO", txt, "OK", "qtd %d", r.quantidade);
+    }
     else
         registra(LOG_ERRO, "NOVO", txt,
                  res == LISTA_ERRO ? "SEM MEMÓRIA" : "VALOR INVÁLIDO", "qtd %d", r.quantidade);
@@ -691,6 +722,10 @@ void tela_remover(Lista *li)
         return;
     }
     if (remove_lista(li, ohms) == LISTA_OK) {
+        Resistor removido;
+        removido.resistencia = ohms;
+        removido.quantidade = qtd;
+        ck_registra_remover(checkpoint, removido);
         registra(LOG_INFO, "REMOVER", txt, "OK", "qtd %d", qtd);
         ui_caixa_feedback(UI_SUCESSO, "Resistor removido", "%s removido do estoque", txt);
     } else {
@@ -811,6 +846,7 @@ void tela_retirar(Lista *li)
     }
 
     res = retira_estoque(li, ohms, qtd);
+    if (res == LISTA_OK) ck_registra_movimento(checkpoint, OP_RETIRAR, ohms, qtd);
     if (res == LISTA_OK && atual - qtd == 0)
         registra(LOG_AVISO, "RETIRAR", txt, "OK - ESTOQUE ZERADO", "-%d (%d%s0)", qtd, atual,
                  UI_SETA);
@@ -853,9 +889,10 @@ void tela_repor(Lista *li)
     }
 
     res = repor_estoque(li, ohms, qtd);
-    if (res == LISTA_OK)
+    if (res == LISTA_OK) {
+        ck_registra_movimento(checkpoint, OP_REPOR, ohms, qtd);
         registra(LOG_INFO, "REPOR", txt, "OK", "+%d (%d%s%d)", qtd, atual, UI_SETA, atual + qtd);
-    else
+    } else
         registra(LOG_ERRO, "REPOR", txt, "LIMITE EXCEDIDO", "+%d (tem %d)", qtd, atual);
     if (res == LISTA_OK)
         ui_caixa_feedback(UI_SUCESSO, "Reposição concluída",
@@ -890,6 +927,7 @@ void tela_reinicializar(Lista *li)
         feedback_cancelado("REINICIALIZAR", NULL);
         return;
     }
+    ck_registra_reinicializar(checkpoint, li); /* foto antes de apagar */
     reinicializa_lista(li);
     registra(LOG_INFO, "REINICIALIZAR", NULL, "OK", "%d %s (%lld %s)", tipos,
              plural(tipos, "tipo", "tipos"), pecas, plural(pecas, "peça", "peças"));
@@ -909,7 +947,7 @@ void tela_diferencial(void)
     voltar_ao_menu();
 }
 
-/* ---- [3] histórico ---------------------------------------------------- */
+/* ---- [9] histórico: auxiliares das tabelas -------------------------- */
 
 /* Copia s em buf com no máximo `largura` colunas visíveis (UTF-8); se cortar,
  * termina com reticências */
@@ -935,25 +973,224 @@ static int cor_do_nivel(const char *nivel)
     return UI_COR_VERDE;
 }
 
-void tela_historico(void)
+/* ---- checkpoint da sessão (dentro do Histórico) ---------------------- */
+
+/* Larguras das colunas: ponto, hora, ação, resistor, detalhe, estado */
+static const int CK_LARG[] = { 3, 8, 13, 10, 10, 10 };
+#define CK_COLUNAS 6
+#define ALTURA_CHECKPOINT_BASE 12 /* + uma linha por ação */
+
+static const char *nome_operacao(int tipo)
+{
+    static const char *const NOMES[] = { "NOVO", "REMOVER", "RETIRAR", "REPOR", "REINICIALIZAR" };
+    return (tipo >= OP_NOVO && tipo <= OP_REINICIALIZAR) ? NOMES[tipo] : "?";
+}
+
+/* Resistor e detalhe de uma operação, como aparecem na tabela e no log */
+static void descreve_operacao(const Operacao *op, char *alvo, size_t na, char *det, size_t nd)
+{
+    alvo[0] = '\0';
+    det[0] = '\0';
+    switch (op->tipo) {
+    case OP_NOVO:
+        if (op->n_itens == 1) {
+            formata_resistencia(op->itens[0].resistencia, alvo, na);
+            snprintf(det, nd, "qtd %d", op->itens[0].quantidade);
+        } else {
+            snprintf(alvo, na, "%d tipos", op->n_itens);
+            snprintf(det, nd, "lote");
+        }
+        break;
+    case OP_REMOVER:
+        formata_resistencia(op->itens[0].resistencia, alvo, na);
+        snprintf(det, nd, "qtd %d", op->itens[0].quantidade);
+        break;
+    case OP_RETIRAR:
+    case OP_REPOR:
+        formata_resistencia(op->resistencia, alvo, na);
+        snprintf(det, nd, "%c%d", op->tipo == OP_RETIRAR ? '-' : '+', op->qtd);
+        break;
+    case OP_REINICIALIZAR:
+        snprintf(alvo, na, "-");
+        snprintf(det, nd, "%d %s", op->n_itens, plural(op->n_itens, "tipo", "tipos"));
+        break;
+    default:
+        break;
+    }
+}
+
+/* Uma linha da linha do tempo: ponto i (0 = início da sessão). `cursor` é o
+ * ponto destacado no modo interativo (-1 = nenhum) */
+static void linha_checkpoint(int i, int pos, int cursor)
+{
+    const char *rs = ui_cor(UI_COR_RESET);
+    const char *cor = i == cursor ? ui_cor(UI_COR_PRIMARIA)
+                    : i > pos     ? ui_cor(UI_COR_DIM) : "";
+    const char *ng = i == cursor ? ui_cor(UI_COR_NEGRITO) : "";
+    char brutos[CK_COLUNAS][48], cel[CK_COLUNAS][160];
+    const char *ptrs[CK_COLUNAS];
+    int c;
+
+    snprintf(brutos[0], sizeof brutos[0], "%d", i);
+    if (i == 0) {
+        snprintf(brutos[1], sizeof brutos[1], "-");
+        snprintf(brutos[2], sizeof brutos[2], "IN\xC3\x8D" "CIO");
+        snprintf(brutos[3], sizeof brutos[3], "-");
+        snprintf(brutos[4], sizeof brutos[4], "sess\xC3\xA3o");
+    } else {
+        const Operacao *op = ck_operacao(checkpoint, i);
+        const struct tm *tm = op != NULL ? localtime(&op->quando) : NULL;
+        if (tm == NULL || strftime(brutos[1], sizeof brutos[1], "%H:%M:%S", tm) == 0)
+            snprintf(brutos[1], sizeof brutos[1], "--:--:--");
+        snprintf(brutos[2], sizeof brutos[2], "%s", op != NULL ? nome_operacao(op->tipo) : "?");
+        if (op != NULL)
+            descreve_operacao(op, brutos[3], sizeof brutos[3], brutos[4], sizeof brutos[4]);
+        else
+            brutos[3][0] = brutos[4][0] = '\0';
+    }
+    if (i == pos) snprintf(brutos[5], sizeof brutos[5], "%s atual", UI_PROMPT);
+    else snprintf(brutos[5], sizeof brutos[5], "%s",
+                  i == 0 ? "-" : i > pos ? "desfeita" : "aplicada");
+
+    for (c = 0; c < CK_COLUNAS; c++) {
+        char texto[96];
+        corta(brutos[c], texto, sizeof texto, CK_LARG[c]);
+        snprintf(cel[c], sizeof cel[c], "%s%s%s%s", ng, cor, texto, rs);
+        ptrs[c] = cel[c];
+    }
+    ui_tabela_linha(ptrs, CK_LARG, NULL, CK_COLUNAS);
+}
+
+/* Tabela com todos os pontos da sessão, o mais recente em cima */
+static void desenha_checkpoint(int cursor)
+{
+    static const char *const TITULOS[CK_COLUNAS] = {
+        "#", "Hora", "A\xC3\xA7\xC3\xA3o", "Resistor", "Detalhe", "Estado"
+    };
+    char cab[CK_COLUNAS][48];
+    const char *ptrs[CK_COLUNAS];
+    int c, i, pos = ck_posicao(checkpoint), total = ck_total(checkpoint);
+
+    for (c = 0; c < CK_COLUNAS; c++) {
+        snprintf(cab[c], sizeof cab[c], "%s%s%s", ui_cor(UI_COR_NEGRITO), TITULOS[c],
+                 ui_cor(UI_COR_RESET));
+        ptrs[c] = cab[c];
+    }
+    ui_tabela_borda(UI_TAB_TOPO, CK_LARG, CK_COLUNAS);
+    ui_tabela_linha(ptrs, CK_LARG, NULL, CK_COLUNAS);
+    ui_tabela_borda(UI_TAB_MEIO, CK_LARG, CK_COLUNAS);
+    for (i = total; i >= 0; i--) linha_checkpoint(i, pos, cursor);
+    ui_tabela_borda(UI_TAB_BASE, CK_LARG, CK_COLUNAS);
+}
+
+int checkpoint_navegar(int pos, int tecla, int total)
+{
+    if (tecla == KEY_UP || tecla == 'w' || tecla == 'W') return pos < total ? pos + 1 : pos;
+    if (tecla == KEY_DOWN || tecla == 's' || tecla == 'S') return pos > 0 ? pos - 1 : pos;
+    return pos;
+}
+
+typedef struct {
+    int desfeitas, refeitas;
+} Passos;
+
+/* Aviso de ck_ir_para: conta e registra no log cada ação desfeita/refeita */
+static void registra_passo(int sentido, const Operacao *op, void *ctx)
+{
+    Passos *p = ctx;
+    char alvo[TAM_RES], det[48];
+    descreve_operacao(op, alvo, sizeof alvo, det, sizeof det);
+    if (sentido == CK_DESFEITA) p->desfeitas++;
+    else p->refeitas++;
+    registra(LOG_INFO, sentido == CK_DESFEITA ? "DESFAZER" : "REFAZER", alvo, "OK",
+             "%s %s", nome_operacao(op->tipo), det);
+}
+
+/* Leva o estoque ao ponto `alvo` e mostra o resultado */
+static void aplica_checkpoint(Lista *li, int alvo)
+{
+    Passos p = { 0, 0 };
+    int de = ck_posicao(checkpoint), total = ck_total(checkpoint), n;
+
+    if (alvo == de) {
+        ui_caixa_feedback(UI_INFO, "Nada a fazer", "O estoque j\xC3\xA1 est\xC3\xA1 no ponto %d",
+                          alvo);
+        return;
+    }
+    if (ck_ir_para(checkpoint, li, alvo, registra_passo, &p) != CK_OK) {
+        registra(LOG_ERRO, "CHECKPOINT", NULL, "FALHOU", "ponto %d %s %d", de, UI_SETA, alvo);
+        ui_caixa_feedback(UI_ERRO, "Falha ao voltar no hist\xC3\xB3rico",
+                          "Mem\xC3\xB3ria insuficiente; estoque no ponto %d",
+                          ck_posicao(checkpoint));
+        return;
+    }
+    registra(LOG_INFO, "CHECKPOINT", NULL, "OK", "ponto %d %s %d", de, UI_SETA, alvo);
+    n = p.desfeitas > 0 ? p.desfeitas : p.refeitas;
+    ui_caixa_feedback(UI_SUCESSO, "Checkpoint aplicado", "%d %s %s\nAgora no ponto %d de %d",
+                      n, plural(n, "a\xC3\xA7\xC3\xA3o", "a\xC3\xA7\xC3\xB5" "es"),
+                      p.desfeitas > 0 ? plural(n, "desfeita", "desfeitas")
+                                      : plural(n, "refeita", "refeitas"),
+                      alvo, total);
+}
+
+/* Sem terminal (e2e, testes): mostra a linha do tempo e lê o número do ponto */
+static void checkpoint_texto(Lista *li)
+{
+    char buf[TAM_ENTRADA];
+    int alvo, total = ck_total(checkpoint);
+
+    putchar('\n');
+    ui_mensagem(UI_INFO, "Checkpoint desta sess\xC3\xA3o (%d %s)", total,
+                plural(total, "a\xC3\xA7\xC3\xA3o", "a\xC3\xA7\xC3\xB5" "es"));
+    desenha_checkpoint(-1);
+    if (!ui_ler_linha("Ir para o ponto n\xC2\xBA (Enter mant\xC3\xA9m): ", buf, sizeof buf)
+        || buf[0] == '\0')
+        return;
+    if (!parse_quantidade(buf, 0, &alvo) || alvo > total) {
+        char citado[40];
+        snprintf(citado, sizeof citado, "\"%.24s\"", buf);
+        registra(LOG_ERRO, "CHECKPOINT", citado, "PONTO INV\xC3\x81LIDO", NULL);
+        ui_mensagem(UI_ERRO, "Ponto inv\xC3\xA1lido: escolha de 0 a %d.", total);
+        return;
+    }
+    aplica_checkpoint(li, alvo);
+}
+
+/* No terminal: setas movem o marcador, Enter aplica, Esc volta sem mudar */
+static void checkpoint_interativo(Lista *li)
+{
+    int cursor = ck_posicao(checkpoint);
+    protege_terminal();
+    mostra_cursor(0);
+    for (;;) {
+        int c, total = ck_total(checkpoint);
+        abre_tela("Checkpoint da sess\xC3\xA3o", ALTURA_CHECKPOINT_BASE + total);
+        desenha_checkpoint(cursor);
+        ui_dica("\xE2\x86\x91\xE2\x86\x93/WS Escolher o ponto %s [Enter] Ir para ele %s [Esc] Voltar",
+                UI_PONTO, UI_PONTO);
+        c = ler_tecla();
+        if (c == KEY_ESC || c == KEY_FIM || c == '0') { mostra_cursor(1); return; }
+        if (c == '\r' || c == '\n') break;
+        cursor = checkpoint_navegar(cursor, c, total);
+    }
+    mostra_cursor(1);
+    putchar('\n');
+    aplica_checkpoint(li, cursor);
+    voltar_ao_menu();
+}
+
+/* ---- [9] histórico ---------------------------------------------------- */
+
+/* Tabela das `n` últimas ações lidas dos logs, a mais recente em cima */
+static void tabela_log(const LogEntrada *v, int n)
 {
     static const char *const TITULOS[5] = {
         "Quando", "Ação", "Resistor", "Detalhe", "Resultado"
     };
-    LogEntrada v[HISTORICO_MAX];
     char cab[5][48], cel[5][128], quando[16];
     const char *ptrs[5];
     const char *rs = ui_cor(UI_COR_RESET);
-    int n = log_ultimas(v, HISTORICO_MAX), i, c;
-
-    abre_tela("Histórico", ALTURA_HISTORICO_BASE + n);
-    if (n == 0) {
-        ui_mensagem(UI_INFO, "Nenhuma ação registrada nos últimos %d dias.",
-                    LOG_DIAS_HISTORICO);
-        registra(LOG_INFO, "HISTÓRICO", NULL, "VAZIO", NULL);
-        voltar_ao_menu();
-        return;
-    }
+    int i, c;
 
     for (c = 0; c < 5; c++) {
         snprintf(cab[c], sizeof cab[c], "%s%s%s", ui_cor(UI_COR_NEGRITO), TITULOS[c], rs);
@@ -977,13 +1214,47 @@ void tela_historico(void)
         ui_tabela_linha(ptrs, HIST_LARG, NULL, 5);
     }
     ui_tabela_borda(UI_TAB_BASE, HIST_LARG, 5);
-    ui_dica("%d %s mais %s (últimos %d dias)", n,
-            plural(n, "ação", "ações"),
-            plural(n, "recente", "recentes"), LOG_DIAS_HISTORICO);
-    /* registrado depois da leitura, para a tela não listar a si mesma */
-    registra(LOG_INFO, "HISTÓRICO", NULL, "OK", "%d %s", n,
-             plural(n, "ação", "ações"));
-    voltar_ao_menu();
+}
+
+void tela_historico(Lista *li)
+{
+    LogEntrada v[HISTORICO_MAX];
+    int n = log_ultimas(v, HISTORICO_MAX);
+    int tem_ck = li != NULL && ck_total(checkpoint) > 0;
+
+    abre_tela("Histórico", ALTURA_HISTORICO_BASE + n
+              + (tem_ck && !ui_interativo() ? ALTURA_CHECKPOINT_BASE + ck_total(checkpoint) : 0));
+    if (n == 0) {
+        ui_mensagem(UI_INFO, "Nenhuma ação registrada nos últimos %d dias.",
+                    LOG_DIAS_HISTORICO);
+        registra(LOG_INFO, "HISTÓRICO", NULL, "VAZIO", NULL);
+    } else {
+        tabela_log(v, n);
+        ui_dica("%d %s mais %s (últimos %d dias)", n,
+                plural(n, "ação", "ações"),
+                plural(n, "recente", "recentes"), LOG_DIAS_HISTORICO);
+        /* registrado depois da leitura, para a tela não listar a si mesma */
+        registra(LOG_INFO, "HISTÓRICO", NULL, "OK", "%d %s", n,
+                 plural(n, "ação", "ações"));
+    }
+
+    if (!tem_ck) {
+        voltar_ao_menu();
+        return;
+    }
+    if (!ui_interativo()) {
+        checkpoint_texto(li);
+        voltar_ao_menu();
+        return;
+    }
+    /* no terminal, a linha do tempo abre numa tela própria */
+    ui_dica("[C] Voltar a um checkpoint desta sess\xC3\xA3o %s [Enter] Voltar ao menu", UI_PONTO);
+    for (;;) {
+        int t = ler_tecla();
+        if (t == 'c' || t == 'C') break;
+        if (t == '\r' || t == '\n' || t == KEY_ESC || t == KEY_FIM) return;
+    }
+    checkpoint_interativo(li);
 }
 
 /* ---- [5] encerramento -------------------------------------------------- */

@@ -6,7 +6,7 @@
 #   make asan       testes + e2e com ASan/UBSan (nao roda no MinGW; fora do CI)
 #   make cppcheck   análise estática
 #   make clean      remove build/ e dist/
-#   make icone      regenera src/assets/ohmflow.ico a partir do logo (Windows, Pillow)
+#   make icone      regenera src/assets/logo/ohmflow.ico a partir do logo (Windows, Pillow)
 #   make setup      gera dist/ohm_flow_setup.exe (Windows, Inno Setup 6) [VERSAO=x.y.z]
 #   make teste-setup  instala o setup em silencio, roda o programa e desinstala
 
@@ -25,7 +25,7 @@ VERSAO_NUM   = $(subst .,$(virgula),$(firstword $(subst -, ,$(VERSAO)))),0
 ifeq ($(OS),Windows_NT)
   EXE     = .exe
   WINDRES = windres
-  ICO     = src/assets/ohmflow.ico
+  ICO     = src/assets/logo/ohmflow.ico
   RES_OBJ = $(BUILD)/ohmflow_res.o
   # Subsistema console (CUI): cmd/PowerShell esperam o programa terminar (issue #11)
   CHECA_SUBSISTEMA = objdump -p $(BIN) | grep -q '(Windows CUI)' \
@@ -38,11 +38,11 @@ else
   CHECA_SUBSISTEMA = true
 endif
 
-SRC_LIB   = src/lista.c src/formatacao.c src/log.c src/ui/ui.c src/ui/telas.c
+SRC_LIB   = src/lista.c src/pilha.c src/checkpoint.c src/formatacao.c src/log.c src/ui/ui.c src/ui/telas.c
 SRC_MAIN  = src/main.c
 HEADERS   = $(wildcard src/*.h src/ui/*.h)
 BIN       = $(DIST)/ohmflow$(EXE)
-TESTES    = test_lista test_formatacao test_log test_ui test_telas test_novo
+TESTES    = test_lista test_pilha test_checkpoint test_formatacao test_log test_ui test_telas test_novo
 TEST_BINS = $(addprefix $(BUILD)/,$(addsuffix $(EXE),$(TESTES)))
 
 E2E_ENTRADA  = tests/e2e/entrada.txt
@@ -66,12 +66,12 @@ $(BUILD):
 # O .ico é versionado: só é gerado (Python + Pillow) se estiver faltando, para
 # um checkout limpo não depender da data de logo.png. Para regenerar após
 # trocar o logo: make icone
-GERA_ICO = python -c "from PIL import Image; img=Image.open('src/assets/logo.png').convert('RGBA'); img.save('$(ICO)', format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+GERA_ICO = python -c "from PIL import Image; img=Image.open('src/assets/logo/logo.png').convert('RGBA'); img.save('$(ICO)', format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])"
 
-$(ICO): | src/assets/logo.png
+$(ICO): | src/assets/logo/logo.png
 	$(GERA_ICO)
 
-icone: src/assets/logo.png
+icone: src/assets/logo/logo.png
 	$(GERA_ICO)
 
 $(RES_OBJ): src/assets/ohmflow.rc $(ICO) | $(BUILD)
@@ -113,6 +113,9 @@ e2e: $(BIN) | $(BUILD)
 	              '| AVISO | RETIRAR       | 4,7 kΩ     | -100 (tem 7)         | SEM ESTOQUE' \
 	              '| ERRO  | NOVO          | "abc"' \
 	              '| INFO  | NOVO          | -          | 3 ok · 1 dup · 1 inv | LOTE CONCLUÍDO' \
+	              '| INFO  | DESFAZER      | 3 tipos    | NOVO lote            | OK' \
+	              '| INFO  | REFAZER       | -          | REINICIALIZAR 3 tipos | OK' \
+	              '| INFO  | CHECKPOINT    | -          | ponto 11 → 9         | OK' \
 	              'sessão encerrada em'; do \
 	  grep -qF -- "$$trecho" "$$log" || { echo "E2E FALHOU: log sem: $$trecho (veja $$log)"; exit 1; }; \
 	done; \

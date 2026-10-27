@@ -7,6 +7,7 @@
 #define TELAS_H
 
 #include "lista.h"
+#include "checkpoint.h"
 
 /* Opções do menu principal. [9] Histórico ocupa a linha de baixo, onde
  * ficava o antigo "[0] Sair" */
@@ -68,6 +69,14 @@ enum { ITEM_INVALIDO = 0, ITEM_SO_RESISTENCIA, ITEM_COMPLETO };
  * ITEM_INVALIDO. Quantidade: inteiro de 0 a INT_MAX. */
 int parse_item(const char *s, Resistor *r);
 
+/* Checkpoint da sessão usado pelas telas que mudam o estoque (registram cada
+ * ação) e pelo Histórico (volta/avança). NULL desliga o registro */
+void telas_definir_checkpoint(Checkpoint *ck);
+
+/* Nova posição do marcador na tela de checkpoint: ↑/W vai para a ação mais
+ * recente, ↓/S para a mais antiga, sem passar de 0..total */
+int checkpoint_navegar(int pos, int tecla, int total);
+
 void tela_boas_vindas(void);
 int  tela_menu(const Lista *li); /* devolve OPCAO_*; EOF devolve OPCAO_SAIR */
 void tela_inserir(Lista *li);
@@ -78,7 +87,7 @@ void tela_retirar(Lista *li);
 void tela_repor(Lista *li);
 void tela_reinicializar(Lista *li);
 void tela_diferencial(void);
-void tela_historico(void); /* últimas ações lidas dos logs */
+void tela_historico(Lista *li); /* últimas ações dos logs + checkpoint da sessão */
 void tela_encerramento(const Lista *li);
 
 #endif /* TELAS_H */
