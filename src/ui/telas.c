@@ -55,6 +55,11 @@ static Checkpoint *checkpoint = NULL;
 
 void telas_definir_checkpoint(Checkpoint *ck) { checkpoint = ck; }
 
+/* Desenho do resistor na tela Novo (telas_definir_resistor); -1 = automático */
+static int modo_resistor = -1;
+
+void telas_definir_resistor(int modo) { modo_resistor = modo; }
+
 /* ---- auxiliares ------------------------------------------------------- */
 
 static const char *plural(long long n, const char *singular, const char *plur)
@@ -560,6 +565,9 @@ typedef struct {
     int       sem_ck;  /* faltou memória para guardar um item */
 } Lote;
 
+static void colore_resistor(double ohms, const char *prompt, const char *digitado,
+                            const Lote *lote);
+
 /* Guarda r em lote->ok, dobrando o vetor quando enche */
 static void guarda_no_lote(Lote *lote, Resistor r)
 {
@@ -614,6 +622,8 @@ static void inserir_em_massa(Lista *li, Resistor primeiro)
             ui_mensagem(UI_ERRO, "Linha inválida: \"%s\"", buf);
             continue;
         }
+        /* cada item válido redesenha o resistor com as suas cores */
+        colore_resistor(r.resistencia, "Resistência [quantidade]: ", buf, &lote);
         /* só a resistência: pede a quantidade (duplicado nem chega a perguntar) */
         if (tipo == ITEM_SO_RESISTENCIA && consulta_lista(li, r.resistencia, NULL) != LISTA_OK) {
             char txt[TAM_RES];
@@ -649,6 +659,7 @@ static int mostra_resistor(void)
 #ifdef OHM_ASCII
     return 0;
 #else
+    if (modo_resistor >= 0) return modo_resistor;
     return ui_interativo() && ui_cor_ativa();
 #endif
 }
@@ -680,15 +691,20 @@ static void abre_tela_novo(const int *faixas)
 
 /* Redesenha a tela Novo com o resistor colorido pelo código de cores de
  * `ohms` (tolerância sempre dourada), repete a linha já digitada e mostra
- * o nome das faixas */
-static void colore_resistor(double ohms, const char *digitado)
+ * o nome das faixas. Em massa (`lote` != NULL), mostra também o placar do
+ * lote até ali, já que o redesenho apaga as linhas anteriores */
+static void colore_resistor(double ohms, const char *prompt, const char *digitado,
+                            const Lote *lote)
 {
     int faixas[RESISTOR_FAIXAS], cod;
     // cppcheck-suppress knownConditionTrueFalse ; sempre 0 só com -DOHM_ASCII
     if (!mostra_resistor()) return;
     cod = codigo_cores(ohms, faixas);
     abre_tela_novo(faixas);
-    ui_linha_respondida("Resistência: ", digitado);
+    if (lote != NULL)
+        ui_dica("Lote até agora: %d inseridos %s %d duplicados %s %d inválidos",
+                lote->inseridos, UI_PONTO, lote->duplicados, UI_PONTO, lote->invalidos);
+    ui_linha_respondida(prompt, digitado);
     if (cod == CORES_FORA)
         ui_mensagem(UI_AVISO, "Abaixo de 0,1 %s: sem código de 4 faixas", SIMBOLO_OHM);
     else
@@ -719,7 +735,7 @@ void tela_inserir(Lista *li)
         feedback_cancelado("NOVO", NULL);
         return;
     }
-    colore_resistor(r.resistencia, buf);
+    colore_resistor(r.resistencia, "Resistência: ", buf, NULL);
     if (tipo == ITEM_COMPLETO) {
         inserir_em_massa(li, r);
         return;
