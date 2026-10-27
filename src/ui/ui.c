@@ -25,6 +25,7 @@
 #else
 #include <errno.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #define UI_ISATTY isatty
@@ -63,7 +64,7 @@ static void descarrega(FILE *out)
 static const char *const CODIGOS[UI_COR_TOTAL] = {
     "\033[0m",       /* RESET       */
     "\033[1m",       /* NEGRITO     */
-    "\033[2m",       /* DIM         */
+    "\033[38;5;244m",/* DIM         = cinza das dicas    */
     "\033[31m",      /* VERMELHO    */
     "\033[32m",      /* VERDE       */
     "\033[33m",      /* AMARELO     */
@@ -71,14 +72,16 @@ static const char *const CODIGOS[UI_COR_TOTAL] = {
     "\033[35m",      /* MAGENTA     */
     "\033[36m",      /* CIANO       */
     "\033[37m",      /* BRANCO      */
-    "\033[38;5;208m",  /* BORDA       = primária           */
-    "\033[1;97m",      /* TITULO      = secundária negrito */
+    "\033[38;5;240m",  /* BORDA       = cinza fino         */
+    "\033[1;38;5;255m",/* TITULO      = secundária negrito */
     "\033[1;38;5;208m",/* PROMPT      = primária negrito   */
     "\033[38;5;208m",  /* LARANJA retro (Claude Code style) */
     "\033[38;5;46m",   /* VERDE NEON arcade                */
     "\033[38;5;141m",  /* ROXO/LILAS NEON                   */
-    "\033[38;5;208m",  /* PRIMARIA    = laranja            */
-    "\033[97m"         /* SECUNDARIA  = branco             */
+    "\033[38;5;208m",  /* PRIMARIA    = laranja (destaque) */
+    "\033[38;5;255m",  /* SECUNDARIA  = branco 255         */
+    "\033[38;5;245m",  /* CINZA       = rótulos/metadados  */
+    "\033[48;5;236m"   /* FUNDO_FOCO  = fundo da linha ativa */
 };
 
 void ui_init(void)
@@ -414,13 +417,37 @@ static const Moldura *moldura(int estilo)
 }
 
 /* Linha "║ conteúdo···· ║" com largura interna `inner` e margem esquerda `margem` */
-static void linha_caixa(FILE *out, const Moldura *m, const char *cb, const char *s, int inner, int margem)
+/* Margem interna (colunas de cada lado do texto): o card arredondado
+ * respira mais (2) que as molduras simples e duplas (1) */
+static int respiro(int estilo)
+{
+    return estilo == UI_MOLDURA_ARREDONDADA ? 2 : 1;
+}
+
+/* Largura interna da caixa: cabe o maior texto, com respiro, e o título
+ * embutido na borda ("── Título ─"), nunca abaixo de `largura_min` */
+static int largura_interna(int estilo, const char *titulo_borda, const char *cabecalho,
+                           const char *const *linhas, int n, int largura_min)
+{
+    int inner = largura_min, w, i, pad = respiro(estilo);
+    for (i = 0; i < n; i++)
+        if ((w = (int)ui_largura(linhas[i]) + 2 * pad) > inner) inner = w;
+    if (cabecalho && (w = (int)ui_largura(cabecalho) + 2) > inner) inner = w;
+    if (titulo_borda && (w = (int)ui_largura(titulo_borda) + 5) > inner) inner = w;
+    return inner;
+}
+
+static void linha_caixa(FILE *out, const Moldura *m, const char *cb, const char *s,
+                        int inner, int margem, int pad)
 {
     const char *rs = ui_cor(UI_COR_RESET);
     repete(out, " ", margem);
-    fprintf(out, "%s%s%s ", cb, m->v, rs);
-    ui_pad(out, s, inner - 2, 0);
-    fprintf(out, "%s %s%s%s\n", rs, cb, m->v, rs);
+    fprintf(out, "%s%s%s", cb, m->v, rs);
+    repete(out, " ", pad);
+    ui_pad(out, s, inner - 2 * pad, 0);
+    fputs(rs, out);
+    repete(out, " ", pad);
+    fprintf(out, "%s%s%s\n", cb, m->v, rs);
 }
 
 static void ui_caixa_com_margem(int estilo, int cor_borda, const char *titulo_borda,
@@ -430,19 +457,16 @@ static void ui_caixa_com_margem(int estilo, int cor_borda, const char *titulo_bo
     FILE *out = saida();
     const Moldura *m = moldura(estilo);
     const char *cb = ui_cor(cor_borda), *rs = ui_cor(UI_COR_RESET);
-    int inner = largura_min, w, i;
+    int pad = respiro(estilo);
+    int inner = largura_interna(estilo, titulo_borda, cabecalho, linhas, n, largura_min);
+    int i;
 
-    for (i = 0; i < n; i++)
-        if ((w = (int)ui_largura(linhas[i]) + 2) > inner) inner = w;
-    if (cabecalho && (w = (int)ui_largura(cabecalho) + 2) > inner) inner = w;
-    if (titulo_borda && (w = (int)ui_largura(titulo_borda) + 4) > inner) inner = w;
-
-    /* topo: ╔═ Título ═════╗ */
+    /* topo: ╭── Título ─────╮ */
     repete(out, " ", margem);
     fprintf(out, "%s%s", cb, m->tl);
     if (titulo_borda) {
-        fprintf(out, "%s %s%s%s%s ", m->h, ui_cor(UI_COR_NEGRITO), titulo_borda, rs, cb);
-        repete(out, m->h, inner - 3 - (int)ui_largura(titulo_borda));
+        fprintf(out, "%s%s %s%s%s%s ", m->h, m->h, ui_cor(UI_COR_TITULO), titulo_borda, rs, cb);
+        repete(out, m->h, inner - 4 - (int)ui_largura(titulo_borda));
     } else {
         repete(out, m->h, inner);
     }
@@ -450,7 +474,7 @@ static void ui_caixa_com_margem(int estilo, int cor_borda, const char *titulo_bo
 
     /* cabeçalho centralizado + separador */
     if (cabecalho) {
-        int esq;
+        int esq, w;
         w = (int)ui_largura(cabecalho);
         esq = (inner - w) / 2;
         repete(out, " ", margem);
@@ -465,7 +489,10 @@ static void ui_caixa_com_margem(int estilo, int cor_borda, const char *titulo_bo
         fprintf(out, "%s%s\n", m->mr, rs);
     }
 
-    for (i = 0; i < n; i++) linha_caixa(out, m, cb, linhas[i], inner, margem);
+    /* card: uma linha em branco acima e abaixo do conteúdo */
+    if (pad > 1 && n > 0) linha_caixa(out, m, cb, "", inner, margem, pad);
+    for (i = 0; i < n; i++) linha_caixa(out, m, cb, linhas[i], inner, margem, pad);
+    if (pad > 1 && n > 0) linha_caixa(out, m, cb, "", inner, margem, pad);
 
     repete(out, " ", margem);
     fprintf(out, "%s%s", cb, m->bl);
@@ -490,13 +517,8 @@ void ui_caixa_centralizada(int estilo, int cor_borda, const char *titulo_borda,
                            int largura_min)
 {
     int cols = ui_colunas_terminal();
-    int inner = largura_min, w, i, margem;
-    for (i = 0; i < n; i++)
-        if ((w = (int)ui_largura(linhas[i]) + 2) > inner) inner = w;
-    if (cabecalho && (w = (int)ui_largura(cabecalho) + 2) > inner) inner = w;
-    if (titulo_borda && (w = (int)ui_largura(titulo_borda) + 4) > inner) inner = w;
-    
-    margem = (cols - (inner + 2)) / 2;
+    int inner = largura_interna(estilo, titulo_borda, cabecalho, linhas, n, largura_min);
+    int margem = (cols - (inner + 2)) / 2;
     if (margem < 0) margem = 0;
     ui_caixa_com_margem(estilo, cor_borda, titulo_borda, cabecalho, linhas, n, largura_min, margem);
 }
@@ -524,21 +546,23 @@ static const char *icone_do_tipo(int tipo)
 static const char *rotulo_do_tipo(int tipo)
 {
     switch (tipo) {
-    case UI_SUCESSO: return "SUCESSO";
+    case UI_SUCESSO: return "OK";
     case UI_ERRO:    return "ERRO";
     case UI_AVISO:   return "ATEN\xC3\x87\xC3\x83O"; /* ATENÇÃO */
+    case UI_NEUTRO:  return "VAZIO";
     default:         return "INFO";
     }
 }
 
 void ui_caixa_feedback(int tipo, const char *titulo, const char *fmt, ...)
 {
-    char msg[TAM_MSG], rotulo[64], primeira[TAM_MSG];
+    char msg[TAM_MSG], rotulo[96], primeira[TAM_MSG];
     const char *linhas[MAX_LINHAS];
     int n = 0;
     char *p;
 
-    snprintf(rotulo, sizeof rotulo, "%s %s", icone_do_tipo(tipo), rotulo_do_tipo(tipo));
+    /* badge na borda; a cor semântica fica só nele, a moldura é cinza */
+    ui_badge(tipo, NULL, rotulo, sizeof rotulo);
     snprintf(primeira, sizeof primeira, "%s%s%s", ui_cor(UI_COR_NEGRITO),
              titulo ? titulo : "", ui_cor(UI_COR_RESET));
     linhas[n++] = primeira;
@@ -561,7 +585,100 @@ void ui_caixa_feedback(int tipo, const char *titulo, const char *fmt, ...)
     }
 
     putc('\n', saida());
-    ui_caixa(UI_MOLDURA_SIMPLES, cor_do_tipo(tipo), rotulo, NULL, linhas, n, UI_LARGURA);
+    ui_caixa(UI_MOLDURA_SIMPLES, UI_COR_BORDA, rotulo, NULL, linhas, n, UI_LARGURA);
+}
+
+/* ---- badges, tracking e micro-animações ------------------------------ */
+
+void ui_badge(int tipo, const char *rotulo, char *buf, size_t n)
+{
+    const char *fundo;
+    if (buf == NULL || n == 0) return;
+    if (rotulo == NULL) rotulo = rotulo_do_tipo(tipo);
+    if (!cor_ativa) {
+        snprintf(buf, n, "[ %s ]", rotulo);
+        return;
+    }
+    switch (tipo) { /* texto escuro sobre o fundo semântico */
+    case UI_SUCESSO: fundo = "\033[1;38;5;232;48;5;71m";  break; /* verde  */
+    case UI_AVISO:   fundo = "\033[1;38;5;232;48;5;214m"; break; /* âmbar  */
+    case UI_ERRO:    fundo = "\033[1;38;5;232;48;5;167m"; break; /* vermelho */
+    case UI_NEUTRO:  fundo = "\033[1;38;5;255;48;5;240m"; break; /* cinza  */
+    default:         fundo = "\033[1;38;5;232;48;5;208m"; break; /* laranja */
+    }
+    snprintf(buf, n, "%s  %s  %s", fundo, rotulo, CODIGOS[UI_COR_RESET]);
+}
+
+/* Acrescenta `k` bytes de s em buf[*pos], sem passar de n */
+static void anexa_n(char *buf, size_t n, size_t *pos, const char *s, size_t k)
+{
+    if (*pos + 1 >= n) return;
+    if (k > n - 1 - *pos) k = n - 1 - *pos;
+    memcpy(buf + *pos, s, k);
+    *pos += k;
+    buf[*pos] = '\0';
+}
+
+int ui_espacar(const char *s, char *buf, size_t n, int max_colunas)
+{
+    const unsigned char *p;
+    size_t pos = 0;
+    int colunas = 0, primeiro = 1, entre_palavras = 0;
+
+    if (buf == NULL || n == 0) return 0;
+    buf[0] = '\0';
+    if (s == NULL) return 0;
+    for (p = (const unsigned char *)s; *p; ) {
+        char letra[4];
+        size_t tam = *p < 0x80 ? 1 : (*p >= 0xF0 ? 4 : (*p >= 0xE0 ? 3 : 2));
+        if (*p == ' ') { entre_palavras = 1; p++; continue; }
+        memcpy(letra, p, tam);
+        if (tam == 1) {
+            letra[0] = (char)toupper(*p);
+        } else if (tam == 2 && p[0] == 0xC3 && p[1] >= 0xA0 && p[1] <= 0xBE && p[1] != 0xB7) {
+            letra[1] = (char)(p[1] - 0x20); /* à..þ -> À..Þ (Latin-1) */
+        }
+        if (!primeiro) {
+            anexa_n(buf, n, &pos, "   ", entre_palavras ? 3 : 1);
+            colunas += entre_palavras ? 3 : 1;
+        }
+        anexa_n(buf, n, &pos, letra, tam);
+        colunas++;
+        primeiro = 0;
+        entre_palavras = 0;
+        p += tam;
+    }
+    if (colunas > max_colunas || pos + 1 >= n) {
+        snprintf(buf, n, "%s", s);
+        return 0;
+    }
+    return 1;
+}
+
+void ui_pausa_ms(int ms)
+{
+    if (!ui_interativo() || ms <= 0) return;
+    fflush(saida());
+#ifdef _WIN32
+    Sleep((DWORD)ms);
+#else
+    {
+        struct timespec t;
+        t.tv_sec = ms / 1000;
+        t.tv_nsec = (long)(ms % 1000) * 1000000L;
+        nanosleep(&t, NULL);
+    }
+#endif
+}
+
+int ui_tecla_pendente(void)
+{
+    if (!entrada_tty) return 0;
+#ifdef _WIN32
+    return _kbhit() != 0;
+#else
+    return 0; /* POSIX: a tecla só é lida em modo cru dentro de ler_tecla */
+#endif
 }
 
 /* ---- mensagens de uma linha ------------------------------------------- */

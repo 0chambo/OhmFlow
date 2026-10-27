@@ -254,7 +254,8 @@ static void teste_menu_cor_laranja_na_borda(void)
     fclose(f);
     libera_lista(li);
 
-    /* A borda usa UI_COR_LARANJA = \033[38;5;208m */
+    /* Borda fina cinza; o laranja fica só no destaque (opção ativa) */
+    ASSERT_TRUE(strstr(buf, "\033[38;5;240m") != NULL);
     ASSERT_TRUE(strstr(buf, "\033[38;5;208m") != NULL);
 }
 
@@ -303,10 +304,68 @@ static void teste_menu_so_laranja_e_branco(void)
     fclose(f);
     libera_lista(li);
 
-    /* Não selecionadas e contadores em branco (secundária), sem neon */
-    ASSERT_TRUE(strstr(buf, "\033[97m") != NULL);
+    /* Não selecionadas em branco 255, metadados em cinza, sem neon */
+    ASSERT_TRUE(strstr(buf, "\033[38;5;255m") != NULL);
+    ASSERT_TRUE(strstr(buf, "\033[38;5;245m") != NULL);
     ASSERT_TRUE(strstr(buf, "\033[38;5;46m") == NULL);  /* verde neon */
     ASSERT_TRUE(strstr(buf, "\033[38;5;141m") == NULL); /* roxo neon  */
+}
+
+/* Quantas vezes `agulha` aparece em `s` */
+static int conta(const char *s, const char *agulha)
+{
+    int n = 0;
+    size_t t = strlen(agulha);
+    while ((s = strstr(s, agulha)) != NULL) { n++; s += t; }
+    return n;
+}
+
+/* Foco do menu: só a opção ativa tem o chevron › e o fundo 236 */
+static void teste_menu_foco_chevron(void)
+{
+    char buf[16384];
+    FILE *f = abre_temp();
+    Lista *li;
+    if (f == NULL) return;
+
+    li = cria_lista();
+    ui_init();
+    ui_definir_saida(f);
+    ui_definir_cor(1);
+    desenha_menu(li, 6); /* Repor */
+    conteudo(f, buf, sizeof buf);
+    ui_definir_cor(0);
+    ui_definir_saida(stdout);
+    fclose(f);
+    libera_lista(li);
+
+    ASSERT_EQ_INT(1, conta(buf, UI_CHEVRON));
+    ASSERT_EQ_INT(1, conta(buf, "\033[48;5;236m"));
+    /* chevron vem antes do rótulo da opção ativa */
+    ASSERT_TRUE(strstr(buf, UI_CHEVRON) < strstr(buf, "Repor"));
+    ASSERT_TRUE(strstr(buf, UI_CHEVRON) > strstr(buf, "Remover"));
+}
+
+static void teste_menu_foco_sem_cor_mantem_chevron(void)
+{
+    char buf[16384];
+    FILE *f = abre_temp();
+    Lista *li;
+    if (f == NULL) return;
+
+    li = cria_lista();
+    ui_init();
+    ui_definir_saida(f);
+    ui_definir_cor(0);
+    desenha_menu(li, 1);
+    conteudo(f, buf, sizeof buf);
+    ui_definir_saida(stdout);
+    fclose(f);
+    libera_lista(li);
+
+    ASSERT_EQ_INT(1, conta(buf, UI_CHEVRON)); /* foco visível sem cor */
+    ASSERT_TRUE(strchr(buf, '\033') == NULL);
+    ASSERT_TRUE(strstr(buf, "[ VAZIO ]") != NULL); /* estoque vazio */
 }
 
 static void teste_tela_historico_mostra_acoes(void)
@@ -594,6 +653,32 @@ static void teste_listar_mostra_porcentagem(void)
     ASSERT_TRUE(strstr(buf, "75%") < strstr(buf, "25%")); /* ordem crescente */
 }
 
+static void teste_listar_zerado_mostra_badge_vazio(void)
+{
+    char buf[16384];
+    FILE *f = abre_temp();
+    Lista *li;
+    Resistor a = { 220.0, 0 }, b = { 4700.0, 10 };
+    if (f == NULL) return;
+
+    li = cria_lista();
+    insere_lista_ordenada(li, a);
+    insere_lista_ordenada(li, b);
+    ui_init();
+    ui_definir_interativo(0);
+    ui_definir_saida(f);
+    ui_definir_cor(0);
+    tela_listar(li);
+
+    conteudo(f, buf, sizeof buf);
+    ui_definir_saida(stdout);
+    fclose(f);
+    libera_lista(li);
+
+    ASSERT_TRUE(strstr(buf, "[ VAZIO ]") != NULL);
+    ASSERT_TRUE(strstr(buf, "100%") != NULL);
+}
+
 int main(void)
 {
     printf("=== test_telas ===\n");
@@ -633,6 +718,9 @@ int main(void)
     RUN_TEST(teste_banner_linha_invalida);
     RUN_TEST(teste_banner_fallback);
     RUN_TEST(teste_listar_mostra_porcentagem);
+    RUN_TEST(teste_listar_zerado_mostra_badge_vazio);
+    RUN_TEST(teste_menu_foco_chevron);
+    RUN_TEST(teste_menu_foco_sem_cor_mantem_chevron);
 
     return tf_resumo("telas");
 }

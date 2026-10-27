@@ -16,8 +16,8 @@
 /* Largura interna padrão das caixas */
 #define UI_LARGURA 38
 
-/* Tipos de mensagem / feedback */
-enum { UI_SUCESSO, UI_ERRO, UI_AVISO, UI_INFO };
+/* Tipos de mensagem / feedback (UI_NEUTRO: só badges, ex. [ VAZIO ]) */
+enum { UI_SUCESSO, UI_ERRO, UI_AVISO, UI_INFO, UI_NEUTRO };
 
 /* Estilos de moldura */
 enum { UI_MOLDURA_DUPLA, UI_MOLDURA_SIMPLES, UI_MOLDURA_ARREDONDADA };
@@ -26,9 +26,11 @@ enum { UI_MOLDURA_DUPLA, UI_MOLDURA_SIMPLES, UI_MOLDURA_ARREDONDADA };
 enum { UI_TAB_TOPO, UI_TAB_MEIO, UI_TAB_BASE };
 
 /* Cores (ui_cor devolve "" quando cor está desligada).
- * Paleta: PRIMARIA = laranja (bordas, prompt, destaque);
- * SECUNDARIA = branco (títulos, texto de apoio, info).
- * BORDA, PROMPT e TITULO derivam dessas duas. */
+ * Paleta monocromática com um único destaque:
+ *   SECUNDARIA = branco 255 (texto principal), TITULO = ele em negrito;
+ *   BORDA = cinza 240 (molduras finas), DIM = cinza 244 (dicas),
+ *   CINZA = 245 (rótulos e metadados), FUNDO_FOCO = fundo 236 (linha ativa);
+ *   PRIMARIA = laranja 208, a cor de destaque (seleção, prompt, barras). */
 enum {
     UI_COR_RESET, UI_COR_NEGRITO, UI_COR_DIM,
     UI_COR_VERMELHO, UI_COR_VERDE, UI_COR_AMARELO, UI_COR_AZUL,
@@ -36,6 +38,7 @@ enum {
     UI_COR_BORDA, UI_COR_TITULO, UI_COR_PROMPT,
     UI_COR_LARANJA, UI_COR_VERDE_NEON, UI_COR_ROXO_NEON,
     UI_COR_PRIMARIA, UI_COR_SECUNDARIA,
+    UI_COR_CINZA, UI_COR_FUNDO_FOCO,
     UI_COR_TOTAL
 };
 
@@ -49,6 +52,7 @@ enum {
 #define UI_PONTO       "-"
 #define UI_BARRA       "|"
 #define UI_BULLET      "*"
+#define UI_CHEVRON     ">"
 #define UI_BLOCO_CHEIO "#"
 #define UI_BLOCO_VAZIO "."
 #else
@@ -61,6 +65,7 @@ enum {
 #define UI_PONTO       "\xC2\xB7"     /* · */
 #define UI_BARRA       "\xE2\x94\x82" /* │ */
 #define UI_BULLET      "\xE2\x97\x8F" /* ● */
+#define UI_CHEVRON     "\xE2\x80\xBA" /* › */
 #define UI_BLOCO_CHEIO "\xE2\x96\x88" /* █ */
 #define UI_BLOCO_VAZIO "\xE2\x96\x91" /* ░ */
 #endif
@@ -136,6 +141,22 @@ void   ui_pad(FILE *out, const char *s, int largura, int alinhar_dir);
  * blocos de 1/8 ▏▎▍▌▋▊▉) na cor `cor`, resto ░ apagado. `fracao` fora de
  * 0..1 é saturada. Com -DOHM_ASCII: '#' e '.' */
 void ui_barra(double fracao, int largura, int cor, char *buf, size_t n);
+
+/* Badge de status: "[ OK ]" sem cor; com cor, "  OK  " em texto escuro
+ * sobre o fundo semântico (verde, âmbar, vermelho, laranja, cinza), mesma
+ * largura. `rotulo` NULL usa o padrão do tipo (OK, ERRO, ATENÇÃO, INFO,
+ * VAZIO). Termina com reset quando há cor */
+void ui_badge(int tipo, const char *rotulo, char *buf, size_t n);
+
+/* Tracking de título: maiúsculas com um espaço entre letras e três entre
+ * palavras ("Estoque atual" -> "E S T O Q U E   A T U A L"). Devolve 1; se
+ * o resultado passar de `max_colunas`, copia `s` sem mudança e devolve 0 */
+int ui_espacar(const char *s, char *buf, size_t n, int max_colunas);
+
+/* Pausa curta (micro-animações); sem terminal não espera */
+void ui_pausa_ms(int ms);
+/* 1 se já há tecla esperando para ser lida (pula animações); 0 caso não */
+int  ui_tecla_pendente(void);
 
 /* Tabelas com bordas */
 void ui_tabela_borda(int pos, const int *larguras, int ncol);

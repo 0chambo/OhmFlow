@@ -100,14 +100,25 @@ static void feedback_cancelado(const char *acao, const char *alvo)
     voltar_ao_menu();
 }
 
+/* Título de tela com tracking ("E S T O Q U E   A T U A L") no terminal,
+ * se couber na caixa; sem terminal (e2e, testes) fica o texto original */
+static const char *titulo_da_tela(const char *titulo, char *buf, size_t n)
+{
+    if (!ui_interativo()) return titulo;
+    ui_espacar(titulo, buf, n, UI_LARGURA - 5);
+    return buf;
+}
+
 /* Limpa a tela e desenha o título. `altura` é a estimativa de linhas da tela
  * inteira (título, perguntas, feedback e pausa), usada para centralizá-la na
  * vertical quando o modo centralizado está ligado */
 static void abre_tela(const char *titulo, int altura)
 {
+    char t[128];
     ui_limpar_tela();
     ui_espaco_vertical(altura);
-    ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, titulo, NULL, NULL, 0, UI_LARGURA);
+    ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, titulo_da_tela(titulo, t, sizeof t),
+             NULL, NULL, 0, UI_LARGURA);
 }
 
 #define MSG_VALOR_INVALIDO "Valor inválido. Exemplos: 220, 4k7, 4.7k, 1M, 470m " \
@@ -628,54 +639,80 @@ int menu_tecla_opcao(int tecla, int selecao)
     return MENU_CONTINUA;
 }
 
-void desenha_menu(const Lista *li, int selecao)
+/* Larguras do rótulo em cada coluna do menu (maior rótulo de cada lado) */
+#define MENU_ROTULO_ESQ 9  /* "Consultar"     */
+#define MENU_ROTULO_DIR 13 /* "Reinicializar" */
+
+/* Célula de uma opção do menu. A opção ativa tem o chevron › em laranja
+ * sobre o fundo 236; na `fase` 0 (meio da animação) o chevron ainda está
+ * uma coluna à esquerda e em cinza, e na fase 1 desliza para o lugar */
+static void celula_menu(char *buf, size_t n, int num, const char *rotulo, int largura,
+                        int ativa, int fase)
+{
+    const char *rs = ui_cor(UI_COR_RESET);
+    if (!ativa) {
+        snprintf(buf, n, "   %s[%d]%s %s%-*s%s ", ui_cor(UI_COR_CINZA), num, rs,
+                 ui_cor(UI_COR_SECUNDARIA), largura, rotulo, rs);
+    } else if (fase == 0) {
+        snprintf(buf, n, "%s%s%s%s  %s[%d] %-*s %s", ui_cor(UI_COR_FUNDO_FOCO),
+                 ui_cor(UI_COR_DIM), UI_CHEVRON, ui_cor(UI_COR_SECUNDARIA),
+                 ui_cor(UI_COR_NEGRITO), num, largura, rotulo, rs);
+    } else {
+        snprintf(buf, n, "%s%s%s %s %s[%d] %-*s %s", ui_cor(UI_COR_FUNDO_FOCO),
+                 ui_cor(UI_COR_PRIMARIA), ui_cor(UI_COR_NEGRITO), UI_CHEVRON,
+                 "", num, largura, rotulo, rs);
+    }
+}
+
+/* Desenha o menu; `fase` 0 é o quadro intermediário da animação do foco */
+static void desenha_menu_fase(const Lista *li, int selecao, int fase)
 {
     static const char *const ROTULOS[OPCAO_TOTAL] = {
         "", "Novo", "Remover", "Listar", "Consultar",
         "Retirar", "Repor", "Reinicializar", "(diferencial)", "Hist\xc3\xb3rico"
     };
-    char linhas[6][160];
-    const char *ptrs[6];
+    char linhas[7][320], esq[160], dir[160], titulo[64], cab[96], vazio[96];
+    const char *ptrs[7];
     const char *sec   = ui_cor(UI_COR_SECUNDARIA);
-    const char *lrj   = ui_cor(UI_COR_PRIMARIA);
+    const char *cinza = ui_cor(UI_COR_CINZA);
     const char *bold  = ui_cor(UI_COR_NEGRITO);
     const char *rs    = ui_cor(UI_COR_RESET);
     const char *dim   = ui_cor(UI_COR_DIM);
-    const char *bullet = UI_BULLET;
     int i, cols = ui_colunas_terminal();
 
     for (i = 0; i < 4; i++) {
-        int esq_num = i + 1;
-        int dir_num = i + 5;
-        const char *ce = (selecao == esq_num) ? lrj  : sec;
-        const char *be = (selecao == esq_num) ? bold : "";
-        const char *cd = (selecao == dir_num) ? lrj  : sec;
-        const char *bd = (selecao == dir_num) ? bold : "";
-        snprintf(linhas[i], sizeof linhas[i],
-                 " %s%s%s%s %s[%d]%s %-11s  %s%s%s%s %s[%d]%s %s",
-                 be, ce, bullet, rs,
-                 ce, esq_num, rs, ROTULOS[esq_num],
-                 bd, cd, bullet, rs,
-                 cd, dir_num, rs, ROTULOS[dir_num]);
+        int num_esq = i + 1, num_dir = i + 5;
+        celula_menu(esq, sizeof esq, num_esq, ROTULOS[num_esq], MENU_ROTULO_ESQ,
+                    selecao == num_esq, fase);
+        celula_menu(dir, sizeof dir, num_dir, ROTULOS[num_dir], MENU_ROTULO_DIR,
+                    selecao == num_dir, fase);
+        snprintf(linhas[i], sizeof linhas[i], "%s%s", esq, dir);
         ptrs[i] = linhas[i];
     }
-    {
-        /* [9] Histórico na linha de baixo */
-        const char *cs = (selecao == OPCAO_HISTORICO) ? lrj : sec;
-        const char *bs = (selecao == OPCAO_HISTORICO) ? bold : "";
-        snprintf(linhas[4], sizeof linhas[4], " %s%s%s%s %s[%d]%s %s",
-                 bs, cs, bullet, rs, cs, OPCAO_HISTORICO, rs, ROTULOS[OPCAO_HISTORICO]);
-    }
+    /* [9] Histórico na linha de baixo */
+    celula_menu(linhas[4], sizeof linhas[4], OPCAO_HISTORICO, ROTULOS[OPCAO_HISTORICO],
+                MENU_ROTULO_ESQ, selecao == OPCAO_HISTORICO, fase);
     ptrs[4] = linhas[4];
-
-    snprintf(linhas[5], sizeof linhas[5], " %sTipos:%s %-4d %s %sPeças:%s %lld",
-             sec, rs, tamanho_lista(li),
-             UI_BARRA,
-             sec, rs, total_pecas(li));
+    linhas[5][0] = '\0';
     ptrs[5] = linhas[5];
 
-    ui_caixa_centralizada(UI_MOLDURA_ARREDONDADA, UI_COR_PRIMARIA, " OhmFlow System ",
-                          "Controle de Estoque 8-Bit", ptrs, 6, UI_LARGURA);
+    /* metadados: rótulos em cinza, valores em branco; estoque vazio = badge */
+    vazio[0] = '\0';
+    if (lista_vazia(li)) {
+        char badge[64];
+        ui_badge(UI_NEUTRO, NULL, badge, sizeof badge);
+        snprintf(vazio, sizeof vazio, "  %s", badge);
+    }
+    snprintf(linhas[6], sizeof linhas[6], "%sTipos%s %s%s%d%s %s%s%s %sPe\xc3\xa7" "as%s %s%s%lld%s%s",
+             cinza, rs, bold, sec, tamanho_lista(li), rs,
+             cinza, UI_PONTO, rs,
+             cinza, rs, bold, sec, total_pecas(li), rs, vazio);
+    ptrs[6] = linhas[6];
+
+    ui_espacar("OhmFlow", titulo, sizeof titulo, UI_LARGURA);
+    snprintf(cab, sizeof cab, "%sControle de Estoque %s 8-Bit%s", cinza, UI_PONTO, rs);
+    ui_caixa_centralizada(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, titulo, cab, ptrs, 7,
+                          UI_LARGURA);
 
     /* Linha de dica centralizada */
     {
@@ -683,18 +720,38 @@ void desenha_menu(const Lista *li, int selecao)
             "\xe2\x86\x91\xe2\x86\x93\xe2\x86\x90\xe2\x86\x92"
             "/WASD Navegar \xc2\xb7 [1-9] Acesso r\xc3\xa1pido \xc2\xb7 [Enter] Confirmar"
             " \xc2\xb7 [Esc/0] Sair";
-        int esq = (cols - (int)ui_largura(dica)) / 2;
-        if (esq < 0) esq = 0;
-        printf("%*s%s%s%s\n", esq, "", dim, dica, rs);
+        int m = (cols - (int)ui_largura(dica)) / 2;
+        if (m < 0) m = 0;
+        printf("%*s%s%s%s\n", m, "", dim, dica, rs);
     }
 }
 
+void desenha_menu(const Lista *li, int selecao)
+{
+    desenha_menu_fase(li, selecao, 1);
+}
+
 /* Linhas que o bloco do menu ocupa na tela (caixa + dica) */
-#define MENU_LINHAS 11
+#define MENU_LINHAS 14
+
+/* Duração do quadro intermediário do chevron deslizante */
+#define MENU_ANIMACAO_MS 30
+
+/* Um quadro do menu, desenhado por cima do anterior (sem limpar a tela) */
+static void quadro_menu(const Lista *li, int selecao, int fase)
+{
+    int pad, i;
+    ui_quadro_inicio();
+    /* Centralização vertical: pad linhas em branco acima do menu */
+    pad = (ui_linhas_terminal() - MENU_LINHAS) / 2;
+    for (i = 0; i < pad; i++) putchar('\n');
+    desenha_menu_fase(li, selecao, fase);
+    ui_quadro_fim();
+}
 
 int tela_menu(const Lista *li)
 {
-    int selecao = 1;
+    int selecao = 1, animar = 0;
 
     /* Modo não interativo: fluxo de texto (e2e, CI, testes) */
     if (!ui_interativo()) {
@@ -729,17 +786,12 @@ int tela_menu(const Lista *li)
     ui_quadro_reset(); /* vindo de outra tela: o 1º quadro limpa tudo */
     ui_descartar_entrada(); /* teclas que sobraram da tela anterior */
     for (;;) {
-        int c, op, pad, i;
-        /* sem limpar a tela a cada tecla: o quadro novo sobrescreve o
-         * anterior e sai numa escrita só, sem piscar */
-        ui_quadro_inicio();
-
-        /* Centralização vertical: pad linhas em branco acima do menu */
-        pad = (ui_linhas_terminal() - MENU_LINHAS) / 2;
-        for (i = 0; i < pad; i++) putchar('\n');
-
-        desenha_menu(li, selecao);
-        ui_quadro_fim();
+        int c, op, nova;
+        if (animar) { /* chevron desliza até a opção nova */
+            quadro_menu(li, selecao, 0);
+            ui_pausa_ms(MENU_ANIMACAO_MS);
+        }
+        quadro_menu(li, selecao, 1);
 
         c = ler_tecla();
 
@@ -747,7 +799,10 @@ int tela_menu(const Lista *li)
         op = menu_tecla_opcao(c, selecao);
         if (op != MENU_CONTINUA) { mostra_cursor(1); return op; }
 
-        selecao = navegar_menu(selecao, c);
+        /* seta segurada (tecla já na fila): sem animação, resposta imediata */
+        nova = navegar_menu(selecao, c);
+        animar = nova != selecao && !ui_tecla_pendente();
+        selecao = nova;
     }
 }
 
@@ -869,13 +924,14 @@ static void abre_tela_novo(const int *faixas)
     if (mostra_resistor()) {
         static char arte[RESISTOR_LINHAS][RESISTOR_TAM_LINHA];
         const char *linhas[RESISTOR_LINHAS];
+        char t[128];
         int i;
         resistor_arte(faixas, arte);
         for (i = 0; i < RESISTOR_LINHAS; i++) linhas[i] = arte[i];
         ui_limpar_tela();
         ui_espaco_vertical(ALTURA_NOVO + RESISTOR_LINHAS);
-        ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Novo resistor", NULL,
-                 linhas, RESISTOR_LINHAS, UI_LARGURA);
+        ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, titulo_da_tela("Novo resistor", t, sizeof t),
+                 NULL, linhas, RESISTOR_LINHAS, UI_LARGURA);
     } else {
         abre_tela("Novo resistor", ALTURA_NOVO);
     }
@@ -1008,14 +1064,17 @@ static double fatia(int qtd, long long total)
     return total > 0 ? (double)qtd / (double)total : 0.0;
 }
 
-/* "█████▌░░░░  56%": barra da fatia e a porcentagem (vermelha se zerada) */
+/* "█████▌░░░░  56%": barra da fatia e a porcentagem; zerado = [ VAZIO ] */
 static void celula_fatia(int qtd, long long total, int largura, char *buf, size_t n)
 {
     char barra[256];
     double f = fatia(qtd, total);
+    if (qtd == 0) { /* zerado: badge em vez de barra vazia e 0% */
+        ui_badge(UI_NEUTRO, NULL, buf, n);
+        return;
+    }
     ui_barra(f, largura, UI_COR_PRIMARIA, barra, sizeof barra);
-    snprintf(buf, n, "%s %s%3d%%%s", barra, qtd == 0 ? ui_cor(UI_COR_VERMELHO) : "",
-             (int)(f * 100 + 0.5), ui_cor(UI_COR_RESET));
+    snprintf(buf, n, "%s %3d%%", barra, (int)(f * 100 + 0.5));
 }
 
 /* Contexto de linha_estoque: número da linha e total de peças */
@@ -1110,7 +1169,8 @@ void tela_consultar(Lista *li)
                  ui_cor(UI_COR_RESET), plural(qtd, "unidade", "unidades"));
         linhas[0] = linha;
         celula_fatia(qtd, total_pecas(li), BARRA_CONSULTAR, fatia_txt, sizeof fatia_txt);
-        snprintf(linha_fatia, sizeof linha_fatia, "%s do estoque", fatia_txt);
+        snprintf(linha_fatia, sizeof linha_fatia, "%s %s%s%s", fatia_txt, ui_cor(UI_COR_DIM),
+                 qtd == 0 ? "sem unidades" : "do estoque", ui_cor(UI_COR_RESET));
         linhas[1] = linha_fatia;
         putchar('\n');
         ui_caixa(UI_MOLDURA_SIMPLES, UI_COR_BORDA, NULL, NULL, linhas, 2, 26);
@@ -1454,6 +1514,7 @@ static void checkpoint_texto(Lista *li)
 static void checkpoint_interativo(Lista *li)
 {
     int cursor = ck_posicao(checkpoint);
+    char t[128];
     protege_terminal();
     mostra_cursor(0);
     ui_quadro_reset();
@@ -1461,7 +1522,8 @@ static void checkpoint_interativo(Lista *li)
         int c, total = ck_total(checkpoint);
         ui_quadro_inicio(); /* setas redesenham por cima, sem limpar a tela */
         ui_espaco_vertical(ALTURA_CHECKPOINT_BASE + total);
-        ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Checkpoint da sess\xC3\xA3o", NULL,
+        ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA,
+                 titulo_da_tela("Checkpoint da sess\xC3\xA3o", t, sizeof t), NULL,
                  NULL, 0, UI_LARGURA);
         desenha_checkpoint(cursor);
         ui_dica("\xE2\x86\x91\xE2\x86\x93/WS Escolher o ponto %s [Enter] Ir para ele %s [Esc] Voltar",
