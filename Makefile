@@ -38,11 +38,11 @@ else
   CHECA_SUBSISTEMA = true
 endif
 
-SRC_LIB   = src/lista.c src/pilha.c src/checkpoint.c src/formatacao.c src/log.c src/ui/ui.c src/ui/telas.c
+SRC_LIB   = src/lista.c src/pilha.c src/checkpoint.c src/formatacao.c src/resistor.c src/log.c src/ui/ui.c src/ui/telas.c
 SRC_MAIN  = src/main.c
 HEADERS   = $(wildcard src/*.h src/ui/*.h)
 BIN       = $(DIST)/ohmflow$(EXE)
-TESTES    = test_lista test_pilha test_checkpoint test_formatacao test_log test_ui test_telas test_novo
+TESTES    = test_lista test_pilha test_checkpoint test_formatacao test_log test_ui test_telas test_novo test_resistor
 TEST_BINS = $(addprefix $(BUILD)/,$(addsuffix $(EXE),$(TESTES)))
 
 E2E_ENTRADA  = tests/e2e/entrada.txt
