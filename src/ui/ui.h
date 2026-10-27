@@ -77,6 +77,14 @@ int  ui_colunas_terminal(void);
 int  ui_linhas_terminal(void);
 void ui_cursor(int visivel); /* 1 = mostra, 0 = esconde */
 
+/* Modo centralizado (desligado por padrão; main liga quando é terminal):
+ * caixas e tabelas saem centralizadas pela própria largura, e mensagens,
+ * dicas e prompts alinhados a um bloco central de UI_LARGURA + 2 colunas */
+void ui_definir_centralizado(int ativo);
+int  ui_centralizado(void);
+int  ui_margem(void);                 /* recuo do bloco central (0 se desligado) */
+void ui_espaco_vertical(int altura);  /* linhas em branco p/ centralizar `altura` linhas */
+
 /* Caixas */
 void ui_caixa(int estilo, int cor_borda, const char *titulo_borda,
               const char *cabecalho, const char *const *linhas, int n,
