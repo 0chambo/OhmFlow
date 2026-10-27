@@ -38,11 +38,11 @@ else
   CHECA_SUBSISTEMA = true
 endif
 
-SRC_LIB   = src/lista.c src/formatacao.c src/log.c src/ui/ui.c src/ui/telas.c
+SRC_LIB   = src/lista.c src/pilha.c src/checkpoint.c src/formatacao.c src/log.c src/ui/ui.c src/ui/telas.c
 SRC_MAIN  = src/main.c
 HEADERS   = $(wildcard src/*.h src/ui/*.h)
 BIN       = $(DIST)/ohmflow$(EXE)
-TESTES    = test_lista test_formatacao test_log test_ui test_telas test_novo
+TESTES    = test_lista test_pilha test_checkpoint test_formatacao test_log test_ui test_telas test_novo
 TEST_BINS = $(addprefix $(BUILD)/,$(addsuffix $(EXE),$(TESTES)))
 
 E2E_ENTRADA  = tests/e2e/entrada.txt
@@ -113,6 +113,9 @@ e2e: $(BIN) | $(BUILD)
 	              '| AVISO | RETIRAR       | 4,7 kΩ     | -100 (tem 7)         | SEM ESTOQUE' \
 	              '| ERRO  | NOVO          | "abc"' \
 	              '| INFO  | NOVO          | -          | 3 ok · 1 dup · 1 inv | LOTE CONCLUÍDO' \
+	              '| INFO  | DESFAZER      | 3 tipos    | NOVO lote            | OK' \
+	              '| INFO  | REFAZER       | -          | REINICIALIZAR 3 tipos | OK' \
+	              '| INFO  | CHECKPOINT    | -          | ponto 11 → 9         | OK' \
 	              'sessão encerrada em'; do \
 	  grep -qF -- "$$trecho" "$$log" || { echo "E2E FALHOU: log sem: $$trecho (veja $$log)"; exit 1; }; \
 	done; \

@@ -6,6 +6,7 @@
 #include "ui.h"
 #include "lista.h"
 #include "log.h"
+#include "checkpoint.h"
 
 /* ---- navegar_menu: navegação vertical ------------------------------------ */
 
@@ -324,7 +325,7 @@ static void teste_tela_historico_mostra_acoes(void)
     ui_definir_interativo(0); /* sem pausa nem limpar tela */
     ui_definir_saida(f);
     ui_definir_cor(0);
-    tela_historico();
+    tela_historico(NULL);
     log_encerrar();
     log_definir_pasta(NULL);
 
@@ -364,6 +365,128 @@ static void teste_menu_mostra_historico_9(void)
     ASSERT_TRUE(strstr(buf, "Sair") == NULL); /* sair agora é Esc ou 0 */
 }
 
+/* ---- checkpoint (desfazer/refazer no Histórico) -------------------------- */
+
+static void teste_checkpoint_navegar(void)
+{
+    /* cima = ação mais recente, baixo = mais antiga; trava nas bordas */
+    ASSERT_EQ_INT(3, checkpoint_navegar(2, KEY_UP, 5));
+    ASSERT_EQ_INT(3, checkpoint_navegar(2, 'w', 5));
+    ASSERT_EQ_INT(1, checkpoint_navegar(2, KEY_DOWN, 5));
+    ASSERT_EQ_INT(1, checkpoint_navegar(2, 'S', 5));
+    ASSERT_EQ_INT(5, checkpoint_navegar(5, KEY_UP, 5));
+    ASSERT_EQ_INT(0, checkpoint_navegar(0, KEY_DOWN, 5));
+    ASSERT_EQ_INT(2, checkpoint_navegar(2, KEY_LEFT, 5));
+    ASSERT_EQ_INT(2, checkpoint_navegar(2, 'x', 5));
+}
+
+#define ARQ_ENTRADA_TELAS "build/_tmp_test_telas_entrada.txt"
+
+/* Faz stdin ler `texto`; 0 se não conseguiu (o teste é pulado) */
+static int entrada(const char *texto)
+{
+    FILE *f = fopen(ARQ_ENTRADA_TELAS, "wb");
+    if (f == NULL) return 0;
+    fputs(texto, f);
+    fclose(f);
+    return freopen(ARQ_ENTRADA_TELAS, "rb", stdin) != NULL;
+}
+
+/* Lista com 3 ações registradas: novo 220 (50), novo 4k7 (10), retirar 4k7 (3) */
+static void prepara_sessao(Lista *li, Checkpoint *ck)
+{
+    Resistor r;
+    r.resistencia = 220;
+    r.quantidade = 50;
+    insere_lista_ordenada(li, r);
+    ck_registra_novo(ck, &r, 1);
+    r.resistencia = 4700;
+    r.quantidade = 10;
+    insere_lista_ordenada(li, r);
+    ck_registra_novo(ck, &r, 1);
+    retira_estoque(li, 4700, 3);
+    ck_registra_movimento(ck, OP_RETIRAR, 4700, 3);
+}
+
+/* Roda o Histórico sem terminal com `roteiro` na entrada; devolve a saída */
+static int roda_historico(Lista *li, Checkpoint *ck, const char *roteiro,
+                          char *buf, size_t n)
+{
+    FILE *f = abre_temp();
+    if (f == NULL || !entrada(roteiro)) { if (f) fclose(f); return 0; }
+    log_definir_pasta("build/test_hist_tmp/logs");
+    ui_init();
+    ui_definir_interativo(0);
+    ui_definir_saida(f);
+    ui_definir_cor(0);
+    telas_definir_checkpoint(ck);
+    tela_historico(li);
+    telas_definir_checkpoint(NULL);
+    log_definir_pasta(NULL);
+    conteudo(f, buf, n);
+    ui_definir_saida(stdout);
+    fclose(f);
+    return 1;
+}
+
+static void teste_historico_volta_ao_checkpoint(void)
+{
+    char buf[16384];
+    Lista *li = cria_lista();
+    Checkpoint *ck = cria_checkpoint();
+    int q = 0;
+    prepara_sessao(li, ck);
+
+    if (roda_historico(li, ck, "1\n", buf, sizeof buf)) {
+        ASSERT_TRUE(strstr(buf, "Checkpoint") != NULL);
+        ASSERT_TRUE(strstr(buf, "RETIRAR") != NULL);
+        ASSERT_EQ_INT(1, ck_posicao(ck));
+        ASSERT_EQ_INT(1, tamanho_lista(li));           /* só o 220 */
+        ASSERT_EQ_INT(LISTA_OK, consulta_lista(li, 220, &q));
+        ASSERT_EQ_INT(50, q);
+        ASSERT_TRUE(strstr(buf, "2 a\xC3\xA7\xC3\xB5" "es desfeitas") != NULL);
+    }
+    /* voltou demais: avança de novo até a ação 2 */
+    if (roda_historico(li, ck, "2\n", buf, sizeof buf)) {
+        ASSERT_EQ_INT(2, ck_posicao(ck));
+        ASSERT_EQ_INT(LISTA_OK, consulta_lista(li, 4700, &q));
+        ASSERT_EQ_INT(10, q);
+        ASSERT_TRUE(strstr(buf, "1 a\xC3\xA7\xC3\xA3o refeita") != NULL);
+    }
+    libera_checkpoint(ck);
+    libera_lista(li);
+}
+
+static void teste_historico_checkpoint_enter_mantem(void)
+{
+    char buf[16384];
+    Lista *li = cria_lista();
+    Checkpoint *ck = cria_checkpoint();
+    prepara_sessao(li, ck);
+    if (roda_historico(li, ck, "\n", buf, sizeof buf)) {
+        ASSERT_EQ_INT(3, ck_posicao(ck));
+        ASSERT_EQ_INT(2, tamanho_lista(li));
+    }
+    /* número fora da faixa não mexe no estoque */
+    if (roda_historico(li, ck, "9\n", buf, sizeof buf)) {
+        ASSERT_EQ_INT(3, ck_posicao(ck));
+        ASSERT_TRUE(strstr(buf, "inv\xC3\xA1lid") != NULL);
+    }
+    libera_checkpoint(ck);
+    libera_lista(li);
+}
+
+static void teste_historico_sem_checkpoint_nao_pergunta(void)
+{
+    char buf[16384];
+    Lista *li = cria_lista();
+    Checkpoint *ck = cria_checkpoint(); /* vazio: nada a desfazer */
+    if (roda_historico(li, ck, "", buf, sizeof buf))
+        ASSERT_TRUE(strstr(buf, "Ir para") == NULL);
+    libera_checkpoint(ck);
+    libera_lista(li);
+}
+
 /* ---- main ---------------------------------------------------------------- */
 
 int main(void)
@@ -394,6 +517,10 @@ int main(void)
     RUN_TEST(teste_menu_cor_laranja_na_borda);
     RUN_TEST(teste_menu_opcao_selecionada_laranja);
     RUN_TEST(teste_menu_so_laranja_e_branco);
+    RUN_TEST(teste_checkpoint_navegar);
+    RUN_TEST(teste_historico_volta_ao_checkpoint);
+    RUN_TEST(teste_historico_checkpoint_enter_mantem);
+    RUN_TEST(teste_historico_sem_checkpoint_nao_pergunta);
 
     return tf_resumo("telas");
 }

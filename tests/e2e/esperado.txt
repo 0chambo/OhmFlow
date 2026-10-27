@@ -66,6 +66,25 @@ Quando
 LISTAR
 LOTE CONCLUÍDO
 ações mais recentes
+Checkpoint desta sessão (11 ações)
+REINICIALIZAR
+Ir para o ponto
+2 ações desfeitas
+Agora no ponto 9 de 11
+
+Estoque atual
+470 mΩ
+220 Ω
+4,7 kΩ
+3 tipos · 68 peças
+
+Histórico
+2 ações refeitas
+Agora no ponto 11 de 11
+
+Estoque atual
+10 kΩ
+3 tipos · 15 peças
 
 Obrigado por usar o OhmFlow
 Estoque final: 3 tipos · 15 peças
