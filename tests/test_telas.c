@@ -265,6 +265,32 @@ static void teste_menu_opcao_selecionada_laranja(void)
     ASSERT_TRUE(strstr(buf, "Listar") != NULL);
 }
 
+static void teste_menu_so_laranja_e_branco(void)
+{
+    char buf[16384];
+    FILE *f = abre_temp();
+    Lista *li;
+    if (f == NULL) return;
+
+    li = cria_lista();
+    ui_init();
+    ui_definir_saida(f);
+    ui_definir_cor(1);
+
+    desenha_menu(li, 3);
+
+    conteudo(f, buf, sizeof buf);
+    ui_definir_cor(0);
+    ui_definir_saida(stdout);
+    fclose(f);
+    libera_lista(li);
+
+    /* Não selecionadas e contadores em branco (secundária), sem neon */
+    ASSERT_TRUE(strstr(buf, "\033[97m") != NULL);
+    ASSERT_TRUE(strstr(buf, "\033[38;5;46m") == NULL);  /* verde neon */
+    ASSERT_TRUE(strstr(buf, "\033[38;5;141m") == NULL); /* roxo neon  */
+}
+
 /* ---- main ---------------------------------------------------------------- */
 
 int main(void)
@@ -291,6 +317,7 @@ int main(void)
     RUN_TEST(teste_navegar_ignora_teclas_especiais);
     RUN_TEST(teste_menu_cor_laranja_na_borda);
     RUN_TEST(teste_menu_opcao_selecionada_laranja);
+    RUN_TEST(teste_menu_so_laranja_e_branco);
 
     return tf_resumo("telas");
 }

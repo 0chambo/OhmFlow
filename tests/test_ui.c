@@ -239,6 +239,43 @@ static void teste_cores_retro_novas(void)
     ASSERT_STR_EQ("", ui_cor(UI_COR_ROXO_NEON));
 }
 
+/* Paleta: laranja primária (bordas, prompt), branco secundária (títulos, info) */
+static void teste_paleta_primaria_secundaria(void)
+{
+    ui_definir_cor(1);
+    ASSERT_STR_EQ("\033[38;5;208m", ui_cor(UI_COR_PRIMARIA));
+    ASSERT_STR_EQ("\033[97m", ui_cor(UI_COR_SECUNDARIA));
+    ASSERT_STR_EQ(ui_cor(UI_COR_PRIMARIA), ui_cor(UI_COR_LARANJA));
+    ASSERT_STR_EQ(ui_cor(UI_COR_PRIMARIA), ui_cor(UI_COR_BORDA));
+    ASSERT_STR_EQ("\033[1;38;5;208m", ui_cor(UI_COR_PROMPT));
+    ASSERT_STR_EQ("\033[1;97m", ui_cor(UI_COR_TITULO));
+    ui_definir_cor(0);
+    ASSERT_STR_EQ("", ui_cor(UI_COR_PRIMARIA));
+    ASSERT_STR_EQ("", ui_cor(UI_COR_SECUNDARIA));
+}
+
+static void teste_interface_sem_ciano_nem_azul(void)
+{
+    char buf[4096];
+    const char *linhas[] = { "conteudo" };
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    ui_definir_saida(f);
+    ui_definir_cor(1);
+    ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Novo resistor", "Cab", linhas, 1, 20);
+    ui_mensagem(UI_INFO, "informativo");
+    ui_tabela_borda(UI_TAB_TOPO, (const int[]){ 4 }, 1);
+    conteudo(f, buf, sizeof buf);
+    ui_definir_cor(0);
+    ui_definir_saida(stdout);
+    fclose(f);
+    ASSERT_TRUE(strstr(buf, "\033[38;5;208m") != NULL); /* borda laranja */
+    ASSERT_TRUE(strstr(buf, "\033[97m") != NULL);       /* info branco   */
+    ASSERT_TRUE(strstr(buf, "\033[36m") == NULL);       /* sem ciano     */
+    ASSERT_TRUE(strstr(buf, "\033[1;36m") == NULL);
+    ASSERT_TRUE(strstr(buf, "\033[34m") == NULL);       /* sem azul      */
+}
+
 static void teste_largura_terminal(void)
 {
     int cols = ui_colunas_terminal();
@@ -521,5 +558,7 @@ int main(void)
     RUN_TEST(teste_tabela_centralizada);
     RUN_TEST(teste_tabela_sem_centralizar_mantem_recuo);
     RUN_TEST(teste_espaco_vertical);
+    RUN_TEST(teste_paleta_primaria_secundaria);
+    RUN_TEST(teste_interface_sem_ciano_nem_azul);
     return tf_resumo("test_ui");
 }

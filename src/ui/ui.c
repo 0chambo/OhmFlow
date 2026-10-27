@@ -62,12 +62,14 @@ static const char *const CODIGOS[UI_COR_TOTAL] = {
     "\033[35m",      /* MAGENTA     */
     "\033[36m",      /* CIANO       */
     "\033[37m",      /* BRANCO      */
-    "\033[36m",      /* BORDA       */
-    "\033[1;37m",    /* TITULO      */
-    "\033[1;36m",    /* PROMPT      */
-    "\033[38;5;208m",/* LARANJA retro (Claude Code style) */
-    "\033[38;5;46m", /* VERDE NEON arcade                */
-    "\033[38;5;141m" /* ROXO/LILAS NEON                   */
+    "\033[38;5;208m",  /* BORDA       = primária           */
+    "\033[1;97m",      /* TITULO      = secundária negrito */
+    "\033[1;38;5;208m",/* PROMPT      = primária negrito   */
+    "\033[38;5;208m",  /* LARANJA retro (Claude Code style) */
+    "\033[38;5;46m",   /* VERDE NEON arcade                */
+    "\033[38;5;141m",  /* ROXO/LILAS NEON                   */
+    "\033[38;5;208m",  /* PRIMARIA    = laranja            */
+    "\033[97m"         /* SECUNDARIA  = branco             */
 };
 
 void ui_init(void)
@@ -446,7 +448,7 @@ static int cor_do_tipo(int tipo)
     case UI_SUCESSO: return UI_COR_VERDE;
     case UI_ERRO:    return UI_COR_VERMELHO;
     case UI_AVISO:   return UI_COR_AMARELO;
-    default:         return UI_COR_AZUL;
+    default:         return UI_COR_SECUNDARIA;
     }
 }
 
