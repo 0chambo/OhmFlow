@@ -73,6 +73,10 @@ int parse_item(const char *s, Resistor *r);
  * ação) e pelo Histórico (volta/avança). NULL desliga o registro */
 void telas_definir_checkpoint(Checkpoint *ck);
 
+/* Desenho do resistor na tela Novo: -1 = automático (só no terminal com
+ * cores, padrão), 0 = nunca, 1 = sempre (testes). Sem efeito com OHM_ASCII */
+void telas_definir_resistor(int modo);
+
 /* Nova posição do marcador na tela de checkpoint: ↑/W vai para a ação mais
  * recente, ↓/S para a mais antiga, sem passar de 0..total */
 int checkpoint_navegar(int pos, int tecla, int total);

@@ -9,6 +9,7 @@
 #include "telas.h"
 #include "ui.h"
 #include "lista.h"
+#include "resistor.h"
 
 #define TAM_SAIDA 32768
 #define ARQ_ENTRADA "build/_tmp_test_novo_entrada.txt"
@@ -201,6 +202,70 @@ static void teste_novo_em_massa(void)
     libera_lista(li);
 }
 
+/* Quantas vezes `agulha` aparece em `s` */
+static int conta(const char *s, const char *agulha)
+{
+    int n = 0;
+    while ((s = strstr(s, agulha)) != NULL) { n++; s += strlen(agulha); }
+    return n;
+}
+
+/* Em massa, cada item válido redesenha o resistor com as suas cores
+ * (desenho forçado, já que os testes rodam sem terminal) */
+static void teste_novo_em_massa_recolore_resistor(void)
+{
+    Lista *li;
+    FILE *f = abre_temp();
+    char marrom[24], violeta[24];
+    const char *depois_4k7;
+    if (f == NULL || !entrada("4k7 10\nlixo\n220 5\n10 2\n\n")) { if (f) fclose(f); return; }
+
+    li = cria_lista();
+    prepara_ui(f, 1);
+    telas_definir_resistor(1);
+    tela_inserir(li);
+    telas_definir_resistor(-1);
+    restaura_ui(f);
+
+    /* tela inicial sem cor + um redesenho por item válido (inválido não) */
+    ASSERT_EQ_INT(4, conta(saida_buf, "Novo resistor"));
+    ASSERT_TRUE(strstr(saida_buf, "Faixas: amarelo " UI_PONTO " violeta " UI_PONTO
+                                  " vermelho " UI_PONTO " dourado") != NULL);
+    ASSERT_TRUE(strstr(saida_buf, "Faixas: vermelho " UI_PONTO " vermelho " UI_PONTO
+                                  " marrom " UI_PONTO " dourado") != NULL);
+    ASSERT_TRUE(strstr(saida_buf, "Faixas: marrom " UI_PONTO " preto " UI_PONTO
+                                  " preto " UI_PONTO " dourado") != NULL);
+    /* o 220 (marrom no multiplicador) é desenhado depois do 4k7 inserido */
+    resistor_rgb_faixa(COR_MARROM, marrom, sizeof marrom);
+    resistor_rgb_faixa(COR_VIOLETA, violeta, sizeof violeta);
+    depois_4k7 = strstr(saida_buf, "inserido (10 un.)");
+    ASSERT_TRUE(depois_4k7 != NULL && strstr(depois_4k7, marrom) != NULL);
+    ASSERT_TRUE(strstr(saida_buf, violeta) != NULL);
+    /* a tela redesenhada mostra o placar do lote até ali */
+    ASSERT_TRUE(strstr(saida_buf, "Lote até agora: 2 inseridos " UI_PONTO
+                                  " 0 duplicados " UI_PONTO " 1 inválidos") != NULL);
+    ASSERT_EQ_INT(3, tamanho_lista(li));
+    libera_lista(li);
+}
+
+/* Sem terminal (padrão dos testes e do e2e) a tela Novo não desenha nada */
+static void teste_novo_sem_terminal_sem_resistor(void)
+{
+    Lista *li;
+    FILE *f = abre_temp();
+    if (f == NULL || !entrada("4k7 10\n220 5\n\n")) { if (f) fclose(f); return; }
+
+    li = cria_lista();
+    prepara_ui(f, 1);
+    tela_inserir(li);
+    restaura_ui(f);
+
+    ASSERT_EQ_INT(1, conta(saida_buf, "Novo resistor"));
+    ASSERT_TRUE(strstr(saida_buf, "\xE2\x96\x80") == NULL); /* ▀ */
+    ASSERT_TRUE(strstr(saida_buf, "Faixas:") == NULL);
+    libera_lista(li);
+}
+
 static void teste_novo_em_massa_eof_encerra(void)
 {
     Lista *li;
@@ -361,6 +426,8 @@ int main(void)
     RUN_TEST(teste_novo_unitario);
     RUN_TEST(teste_novo_unitario_duplicado);
     RUN_TEST(teste_novo_em_massa);
+    RUN_TEST(teste_novo_em_massa_recolore_resistor);
+    RUN_TEST(teste_novo_sem_terminal_sem_resistor);
     RUN_TEST(teste_novo_em_massa_eof_encerra);
     RUN_TEST(teste_novo_primeira_linha_invalida_tenta_de_novo);
     RUN_TEST(teste_menu_rotulo_novo);
