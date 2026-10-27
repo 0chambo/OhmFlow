@@ -195,8 +195,7 @@ void tela_boas_vindas(void)
     int cols = ui_colunas_terminal();
     int rows = ui_linhas_terminal();
     int i, esq, topo;
-    const char *laranja = ui_cor(UI_COR_LARANJA);
-    const char *neon    = ui_cor(UI_COR_VERDE_NEON);
+    const char *laranja = ui_cor(UI_COR_PRIMARIA);
     const char *dim     = ui_cor(UI_COR_DIM);
     const char *rs      = ui_cor(UI_COR_RESET);
 
@@ -226,7 +225,7 @@ void tela_boas_vindas(void)
     {
         int m_esq = (cols - (int)ui_largura(MSG) - 3) / 2;
         if (m_esq < 0) m_esq = 0;
-        printf("%*s%s\xc2\xbb%s %s%s%s\n", m_esq, "", neon, rs, dim, MSG, rs);
+        printf("%*s%s\xc2\xbb%s %s%s%s\n", m_esq, "", laranja, rs, dim, MSG, rs);
     }
 
     /* Aguarda Enter sem ecoar o que for digitado */
@@ -428,8 +427,8 @@ void desenha_menu(const Lista *li, int selecao)
     };
     char linhas[6][160];
     const char *ptrs[6];
-    const char *neon  = ui_cor(UI_COR_VERDE_NEON);
-    const char *lrj   = ui_cor(UI_COR_LARANJA);
+    const char *sec   = ui_cor(UI_COR_SECUNDARIA);
+    const char *lrj   = ui_cor(UI_COR_PRIMARIA);
     const char *bold  = ui_cor(UI_COR_NEGRITO);
     const char *rs    = ui_cor(UI_COR_RESET);
     const char *dim   = ui_cor(UI_COR_DIM);
@@ -439,9 +438,9 @@ void desenha_menu(const Lista *li, int selecao)
     for (i = 0; i < 4; i++) {
         int esq_num = i + 1;
         int dir_num = i + 5;
-        const char *ce = (selecao == esq_num) ? lrj  : neon;
+        const char *ce = (selecao == esq_num) ? lrj  : sec;
         const char *be = (selecao == esq_num) ? bold : "";
-        const char *cd = (selecao == dir_num) ? lrj  : neon;
+        const char *cd = (selecao == dir_num) ? lrj  : sec;
         const char *bd = (selecao == dir_num) ? bold : "";
         snprintf(linhas[i], sizeof linhas[i],
                  " %s%s%s%s %s[%d]%s %-11s  %s%s%s%s %s[%d]%s %s",
@@ -460,12 +459,12 @@ void desenha_menu(const Lista *li, int selecao)
     ptrs[4] = linhas[4];
 
     snprintf(linhas[5], sizeof linhas[5], " %sTipos:%s %-4d %s %sPeças:%s %lld",
-             ui_cor(UI_COR_ROXO_NEON), rs, tamanho_lista(li),
+             sec, rs, tamanho_lista(li),
              UI_BARRA,
-             ui_cor(UI_COR_ROXO_NEON), rs, total_pecas(li));
+             sec, rs, total_pecas(li));
     ptrs[5] = linhas[5];
 
-    ui_caixa_centralizada(UI_MOLDURA_ARREDONDADA, UI_COR_LARANJA, " OhmFlow System ",
+    ui_caixa_centralizada(UI_MOLDURA_ARREDONDADA, UI_COR_PRIMARIA, " OhmFlow System ",
                           "Controle de Estoque 8-Bit", ptrs, 6, UI_LARGURA);
 
     /* Linha de dica centralizada */

@@ -25,13 +25,17 @@ enum { UI_MOLDURA_DUPLA, UI_MOLDURA_SIMPLES, UI_MOLDURA_ARREDONDADA };
 /* Posição da borda de tabela */
 enum { UI_TAB_TOPO, UI_TAB_MEIO, UI_TAB_BASE };
 
-/* Cores (ui_cor devolve "" quando cor está desligada) */
+/* Cores (ui_cor devolve "" quando cor está desligada).
+ * Paleta: PRIMARIA = laranja (bordas, prompt, destaque);
+ * SECUNDARIA = branco (títulos, texto de apoio, info).
+ * BORDA, PROMPT e TITULO derivam dessas duas. */
 enum {
     UI_COR_RESET, UI_COR_NEGRITO, UI_COR_DIM,
     UI_COR_VERMELHO, UI_COR_VERDE, UI_COR_AMARELO, UI_COR_AZUL,
     UI_COR_MAGENTA, UI_COR_CIANO, UI_COR_BRANCO,
     UI_COR_BORDA, UI_COR_TITULO, UI_COR_PROMPT,
     UI_COR_LARANJA, UI_COR_VERDE_NEON, UI_COR_ROXO_NEON,
+    UI_COR_PRIMARIA, UI_COR_SECUNDARIA,
     UI_COR_TOTAL
 };
 
