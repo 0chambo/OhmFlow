@@ -239,16 +239,20 @@ static void teste_cores_retro_novas(void)
     ASSERT_STR_EQ("", ui_cor(UI_COR_ROXO_NEON));
 }
 
-/* Paleta: laranja primária (bordas, prompt), branco secundária (títulos, info) */
+/* Paleta monocromática: texto branco 255, cinzas para bordas (240) e dicas
+ * (244), laranja como única cor de destaque (seleção, prompt) */
 static void teste_paleta_primaria_secundaria(void)
 {
     ui_definir_cor(1);
     ASSERT_STR_EQ("\033[38;5;208m", ui_cor(UI_COR_PRIMARIA));
-    ASSERT_STR_EQ("\033[97m", ui_cor(UI_COR_SECUNDARIA));
+    ASSERT_STR_EQ("\033[38;5;255m", ui_cor(UI_COR_SECUNDARIA));
     ASSERT_STR_EQ(ui_cor(UI_COR_PRIMARIA), ui_cor(UI_COR_LARANJA));
-    ASSERT_STR_EQ(ui_cor(UI_COR_PRIMARIA), ui_cor(UI_COR_BORDA));
+    ASSERT_STR_EQ("\033[38;5;240m", ui_cor(UI_COR_BORDA));
+    ASSERT_STR_EQ("\033[38;5;244m", ui_cor(UI_COR_DIM));
+    ASSERT_STR_EQ("\033[38;5;245m", ui_cor(UI_COR_CINZA));
+    ASSERT_STR_EQ("\033[48;5;236m", ui_cor(UI_COR_FUNDO_FOCO));
     ASSERT_STR_EQ("\033[1;38;5;208m", ui_cor(UI_COR_PROMPT));
-    ASSERT_STR_EQ("\033[1;97m", ui_cor(UI_COR_TITULO));
+    ASSERT_STR_EQ("\033[1;38;5;255m", ui_cor(UI_COR_TITULO));
     ui_definir_cor(0);
     ASSERT_STR_EQ("", ui_cor(UI_COR_PRIMARIA));
     ASSERT_STR_EQ("", ui_cor(UI_COR_SECUNDARIA));
@@ -269,8 +273,10 @@ static void teste_interface_sem_ciano_nem_azul(void)
     ui_definir_cor(0);
     ui_definir_saida(stdout);
     fclose(f);
-    ASSERT_TRUE(strstr(buf, "\033[38;5;208m") != NULL); /* borda laranja */
-    ASSERT_TRUE(strstr(buf, "\033[97m") != NULL);       /* info branco   */
+    ASSERT_TRUE(strstr(buf, "\033[38;5;240m") != NULL); /* borda cinza   */
+    ASSERT_TRUE(strstr(buf, "\033[38;5;255m") != NULL); /* info branco   */
+    ASSERT_TRUE(strstr(buf, "\033[38;5;46m") == NULL);  /* sem neon      */
+    ASSERT_TRUE(strstr(buf, "\033[38;5;141m") == NULL);
     ASSERT_TRUE(strstr(buf, "\033[36m") == NULL);       /* sem ciano     */
     ASSERT_TRUE(strstr(buf, "\033[1;36m") == NULL);
     ASSERT_TRUE(strstr(buf, "\033[34m") == NULL);       /* sem azul      */
@@ -584,7 +590,7 @@ static void teste_barra_cores(void)
     ui_definir_cor(1);
     ui_barra(0.5, 4, UI_COR_PRIMARIA, buf, sizeof buf);
     ASSERT_TRUE(strstr(buf, "\033[38;5;208m") != NULL); /* parte cheia  */
-    ASSERT_TRUE(strstr(buf, "\033[2m") != NULL);        /* parte vazia  */
+    ASSERT_TRUE(strstr(buf, "\033[38;5;244m") != NULL); /* parte vazia  */
     ui_definir_cor(0);
     ui_barra(0.5, 4, UI_COR_PRIMARIA, buf, sizeof buf);
     ASSERT_TRUE(strchr(buf, '\033') == NULL);
@@ -616,6 +622,124 @@ static void teste_quadro_fora_do_terminal_nao_emite(void)
     ASSERT_STR_EQ("", buf);
     ui_definir_saida(stdout);
     fclose(f);
+}
+
+/* ---- badges de status --------------------------------------------------- */
+
+static void teste_badge_sem_cor(void)
+{
+    char buf[128];
+    ui_definir_cor(0);
+    ui_badge(UI_SUCESSO, NULL, buf, sizeof buf);
+    ASSERT_STR_EQ("[ OK ]", buf);
+    ui_badge(UI_AVISO, NULL, buf, sizeof buf);
+    ASSERT_STR_EQ("[ ATEN\xC3\x87\xC3\x83O ]", buf);
+    ui_badge(UI_ERRO, NULL, buf, sizeof buf);
+    ASSERT_STR_EQ("[ ERRO ]", buf);
+    ui_badge(UI_INFO, NULL, buf, sizeof buf);
+    ASSERT_STR_EQ("[ INFO ]", buf);
+    ui_badge(UI_NEUTRO, NULL, buf, sizeof buf);
+    ASSERT_STR_EQ("[ VAZIO ]", buf);
+    ui_badge(UI_SUCESSO, "LOTE", buf, sizeof buf);
+    ASSERT_STR_EQ("[ LOTE ]", buf);
+}
+
+static void teste_badge_com_cor(void)
+{
+    static const struct { int tipo; const char *fundo; } CASOS[] = {
+        { UI_SUCESSO, "48;5;71m" }, { UI_AVISO, "48;5;214m" }, { UI_ERRO, "48;5;167m" },
+        { UI_INFO, "48;5;208m" }, { UI_NEUTRO, "48;5;240m" }
+    };
+    char com[128], sem[128];
+    size_t i, n;
+    for (i = 0; i < sizeof CASOS / sizeof CASOS[0]; i++) {
+        ui_definir_cor(1);
+        ui_badge(CASOS[i].tipo, NULL, com, sizeof com);
+        ASSERT_TRUE(strstr(com, CASOS[i].fundo) != NULL);
+        n = strlen(com);
+        ASSERT_TRUE(n >= 4 && strcmp(com + n - 4, "\033[0m") == 0);
+        ui_definir_cor(0);
+        ui_badge(CASOS[i].tipo, NULL, sem, sizeof sem);
+        ASSERT_EQ_INT(ui_largura(sem), ui_largura(com)); /* mesma largura */
+    }
+}
+
+/* ---- cards: padding e título na borda ------------------------------------ */
+
+static void teste_card_arredondado_com_respiro(void)
+{
+    char buf[TAM_SAIDA];
+    const char *linhas[] = { "conteudo" };
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_definir_cor(0);
+    ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Resumo", NULL, linhas, 1, 20);
+    conteudo(f, buf, sizeof buf);
+#ifndef OHM_ASCII
+    /* título embutido após dois traços: ╭── Resumo ── */
+    ASSERT_TRUE(strstr(buf, "\xE2\x95\xAD\xE2\x94\x80\xE2\x94\x80 Resumo ") != NULL);
+    /* 2 espaços de margem interna */
+    ASSERT_TRUE(strstr(buf, "\xE2\x94\x82  conteudo") != NULL);
+#endif
+    {   /* topo, linha vazia, conteúdo, linha vazia, base = 5 linhas */
+        int n = 0;
+        const char *p;
+        for (p = buf; *p; p++) n += *p == '\n';
+        ASSERT_EQ_INT(5, n);
+    }
+    ASSERT_TRUE(linhas_mesma_largura(buf, NULL));
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_card_so_titulo_sem_respiro(void)
+{
+    char buf[TAM_SAIDA];
+    int n = 0;
+    const char *p;
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_caixa(UI_MOLDURA_ARREDONDADA, UI_COR_BORDA, "Estoque atual", NULL, NULL, 0, UI_LARGURA);
+    conteudo(f, buf, sizeof buf);
+    for (p = buf; *p; p++) n += *p == '\n';
+    ASSERT_EQ_INT(2, n); /* só topo e base */
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+static void teste_feedback_com_badge(void)
+{
+    char buf[TAM_SAIDA];
+    FILE *f = abre_temp();
+    ASSERT_TRUE(f != NULL);
+    if (f == NULL) return;
+    ui_definir_saida(f);
+    ui_definir_cor(0);
+    ui_caixa_feedback(UI_SUCESSO, "Tudo certo", NULL);
+    ui_caixa_feedback(UI_AVISO, "Cuidado", NULL);
+    conteudo(f, buf, sizeof buf);
+    ASSERT_TRUE(strstr(buf, "[ OK ]") != NULL);
+    ASSERT_TRUE(strstr(buf, "[ ATEN\xC3\x87\xC3\x83O ]") != NULL);
+    ui_definir_saida(stdout);
+    fclose(f);
+}
+
+/* ---- tracking dos títulos ------------------------------------------------ */
+
+static void teste_espacar_titulo(void)
+{
+    char buf[128];
+    ASSERT_EQ_INT(1, ui_espacar("Estoque atual", buf, sizeof buf, 40));
+    ASSERT_STR_EQ("E S T O Q U E   A T U A L", buf);
+    ASSERT_EQ_INT(1, ui_espacar("Hist\xC3\xB3rico", buf, sizeof buf, 40));
+    ASSERT_STR_EQ("H I S T \xC3\x93 R I C O", buf);
+    /* não cabe: devolve o texto original */
+    ASSERT_EQ_INT(0, ui_espacar("Checkpoint da sess\xC3\xA3o", buf, sizeof buf, 20));
+    ASSERT_STR_EQ("Checkpoint da sess\xC3\xA3o", buf);
 }
 
 int main(void)
@@ -658,5 +782,11 @@ int main(void)
     RUN_TEST(teste_barra_cores);
     RUN_TEST(teste_barra_buffer_pequeno);
     RUN_TEST(teste_quadro_fora_do_terminal_nao_emite);
+    RUN_TEST(teste_badge_sem_cor);
+    RUN_TEST(teste_badge_com_cor);
+    RUN_TEST(teste_card_arredondado_com_respiro);
+    RUN_TEST(teste_card_so_titulo_sem_respiro);
+    RUN_TEST(teste_feedback_com_badge);
+    RUN_TEST(teste_espacar_titulo);
     return tf_resumo("test_ui");
 }
