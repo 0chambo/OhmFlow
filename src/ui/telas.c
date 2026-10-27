@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,7 @@
 #include "telas.h"
 #include "ui.h"
 #include "formatacao.h"
+#include "log.h"
 
 #define TENTATIVAS  3
 #define TAM_ENTRADA 128
@@ -42,8 +44,24 @@ static void voltar_ao_menu(void)
     ui_pausar("Pressione Enter para voltar ao menu...");
 }
 
-static void feedback_cancelado(void)
+/* Registra no log o desfecho de uma tela; detalhe em formato printf (NULL = "-") */
+static void registra(int nivel, const char *acao, const char *alvo,
+                     const char *resultado, const char *fmt, ...)
 {
+    char detalhe[96];
+    detalhe[0] = '\0';
+    if (fmt != NULL) {
+        va_list ap;
+        va_start(ap, fmt);
+        vsnprintf(detalhe, sizeof detalhe, fmt, ap);
+        va_end(ap);
+    }
+    log_acao(nivel, acao, alvo, detalhe, resultado);
+}
+
+static void feedback_cancelado(const char *acao, const char *alvo)
+{
+    registra(LOG_AVISO, acao, alvo, "CANCELADO", NULL);
     ui_caixa_feedback(UI_AVISO, "Operação cancelada", NULL);
     voltar_ao_menu();
 }
@@ -57,8 +75,17 @@ static void abre_tela(const char *titulo)
 #define MSG_VALOR_INVALIDO "Valor inválido. Exemplos: 220, 4k7, 4.7k, 1M, 470m " \
                            "(faixa 1 m" SIMBOLO_OHM " a 1000 M" SIMBOLO_OHM ")"
 
-/* Lê uma resistência; 0 se cancelado (vazio/EOF) ou após TENTATIVAS inválidas */
-static int ler_resistencia(double *ohms)
+/* Registra no log uma entrada que não é uma resistência válida */
+static void registra_invalido(const char *acao, const char *entrada)
+{
+    char citado[40];
+    snprintf(citado, sizeof citado, "\"%.24s\"", entrada);
+    registra(LOG_ERRO, acao, citado, "VALOR INVÁLIDO", NULL);
+}
+
+/* Lê uma resistência; 0 se cancelado (vazio/EOF) ou após TENTATIVAS inválidas.
+ * Cada entrada inválida vai para o log como ERRO da `acao` */
+static int ler_resistencia(const char *acao, double *ohms)
 {
     char buf[TAM_ENTRADA];
     int t;
@@ -66,6 +93,7 @@ static int ler_resistencia(double *ohms)
         if (!ui_ler_linha("Resistência: ", buf, sizeof buf) || buf[0] == '\0')
             return 0;
         if (parse_resistencia(buf, ohms)) return 1;
+        registra_invalido(acao, buf);
         ui_mensagem(UI_ERRO, MSG_VALOR_INVALIDO);
     }
     return 0;
@@ -83,14 +111,17 @@ static int parse_quantidade(const char *s, int minimo, int *qtd)
     return 1;
 }
 
-/* Lê um inteiro em [minimo, INT_MAX]; 0 se cancelado */
-static int ler_quantidade(const char *prompt, int minimo, int *qtd)
+/* Lê um inteiro em [minimo, INT_MAX]; 0 se cancelado. Entradas inválidas vão
+ * para o log como ERRO da `acao` sobre o resistor `alvo` */
+static int ler_quantidade(const char *acao, const char *alvo, const char *prompt,
+                          int minimo, int *qtd)
 {
     char buf[TAM_ENTRADA];
     int t;
     for (t = 0; t < TENTATIVAS; t++) {
         if (!ui_ler_linha(prompt, buf, sizeof buf) || buf[0] == '\0') return 0;
         if (parse_quantidade(buf, minimo, qtd)) return 1;
+        registra(LOG_ERRO, acao, alvo, "QUANTIDADE INVÁLIDA", "\"%.20s\"", buf);
         ui_mensagem(UI_ERRO, "Quantidade inválida: informe um inteiro de %d a %d.",
                     minimo, INT_MAX);
     }
@@ -112,14 +143,15 @@ int parse_item(const char *s, Resistor *r)
 }
 
 /* Lê a resistência e garante que ela está cadastrada; preenche texto e qtd */
-static int ler_cadastrado(Lista *li, double *ohms, char *txt, int *qtd)
+static int ler_cadastrado(const char *acao, Lista *li, double *ohms, char *txt, int *qtd)
 {
-    if (!ler_resistencia(ohms)) {
-        feedback_cancelado();
+    if (!ler_resistencia(acao, ohms)) {
+        feedback_cancelado(acao, NULL);
         return 0;
     }
     formata_resistencia(*ohms, txt, TAM_RES);
     if (consulta_lista(li, *ohms, qtd) != LISTA_OK) {
+        registra(LOG_AVISO, acao, txt, "NÃO ENCONTRADO", NULL);
         ui_caixa_feedback(UI_ERRO, "Resistor não encontrado",
                           "%s não está no estoque", txt);
         voltar_ao_menu();
@@ -455,6 +487,11 @@ int tela_menu(const Lista *li)
             op = strtol(buf, &fim, 10);
             if (buf[0] != '\0' && *fim == '\0' && op >= 0 && op < OPCAO_TOTAL)
                 return (int)op;
+            {
+                char citado[40];
+                snprintf(citado, sizeof citado, "\"%.24s\"", buf);
+                registra(LOG_ERRO, "MENU", citado, "OPÇÃO INVÁLIDA", NULL);
+            }
             snprintf(erro, sizeof erro,
                      "Op\xc3\xa7\xc3\xa3o inv\xc3\xa1lida \"%s\". Escolha de 0 a %d.",
                      buf, OPCAO_TOTAL - 1);
@@ -499,12 +536,16 @@ static void insere_do_lote(Lista *li, Resistor r, Lote *lote)
     formata_resistencia(r.resistencia, txt, sizeof txt);
     if (res == LISTA_OK) {
         lote->inseridos++;
+        registra(LOG_INFO, "NOVO", txt, "OK", "qtd %d (lote)", r.quantidade);
         ui_mensagem(UI_SUCESSO, "%s inserido (%d un.)", txt, r.quantidade);
     } else if (res == LISTA_DUPLICADO) {
         lote->duplicados++;
+        registra(LOG_AVISO, "NOVO", txt, "JÁ CADASTRADO", "(lote)");
         ui_mensagem(UI_AVISO, "%s já cadastrado - ignorado", txt);
     } else {
         lote->invalidos++;
+        registra(LOG_ERRO, "NOVO", txt, res == LISTA_ERRO ? "SEM MEMÓRIA" : "VALOR INVÁLIDO",
+                 "(lote)");
         ui_mensagem(UI_ERRO, "%s: %s", txt,
                     res == LISTA_ERRO ? "memória insuficiente" : "valor inválido");
     }
@@ -523,19 +564,26 @@ static void inserir_em_massa(Lista *li, Resistor primeiro)
         int tipo = parse_item(buf, &r);
         if (tipo == ITEM_INVALIDO) {
             lote.invalidos++;
+            registra_invalido("NOVO", buf);
             ui_mensagem(UI_ERRO, "Linha inválida: \"%s\"", buf);
             continue;
         }
         /* só a resistência: pede a quantidade (duplicado nem chega a perguntar) */
-        if (tipo == ITEM_SO_RESISTENCIA && consulta_lista(li, r.resistencia, NULL) != LISTA_OK
-            && !ler_quantidade("Quantidade : ", 0, &r.quantidade)) {
-            lote.invalidos++;
-            ui_mensagem(UI_ERRO, "Item sem quantidade ignorado");
-            continue;
+        if (tipo == ITEM_SO_RESISTENCIA && consulta_lista(li, r.resistencia, NULL) != LISTA_OK) {
+            char txt[TAM_RES];
+            formata_resistencia(r.resistencia, txt, sizeof txt);
+            if (!ler_quantidade("NOVO", txt, "Quantidade : ", 0, &r.quantidade)) {
+                lote.invalidos++;
+                registra(LOG_AVISO, "NOVO", txt, "SEM QUANTIDADE", "(lote)");
+                ui_mensagem(UI_ERRO, "Item sem quantidade ignorado");
+                continue;
+            }
         }
         insere_do_lote(li, r, &lote);
     }
 
+    registra(LOG_INFO, "NOVO", NULL, "LOTE CONCLUÍDO", "%d ok %s %d dup %s %d inv",
+             lote.inseridos, UI_PONTO, lote.duplicados, UI_PONTO, lote.invalidos);
     ui_caixa_feedback(lote.inseridos > 0 ? UI_SUCESSO : UI_AVISO, "Inserção em massa concluída",
                       "Inseridos : %d\nDuplicados: %d\nInválidos : %d",
                       lote.inseridos, lote.duplicados, lote.invalidos);
@@ -560,10 +608,13 @@ void tela_inserir(Lista *li)
     for (t = 0; t < TENTATIVAS && tipo == ITEM_INVALIDO; t++) {
         if (!ui_ler_linha("Resistência: ", buf, sizeof buf) || buf[0] == '\0') break;
         tipo = parse_item(buf, &r);
-        if (tipo == ITEM_INVALIDO) ui_mensagem(UI_ERRO, MSG_VALOR_INVALIDO);
+        if (tipo == ITEM_INVALIDO) {
+            registra_invalido("NOVO", buf);
+            ui_mensagem(UI_ERRO, MSG_VALOR_INVALIDO);
+        }
     }
     if (tipo == ITEM_INVALIDO) {
-        feedback_cancelado();
+        feedback_cancelado("NOVO", NULL);
         return;
     }
     if (tipo == ITEM_COMPLETO) {
@@ -573,17 +624,23 @@ void tela_inserir(Lista *li)
 
     formata_resistencia(r.resistencia, txt, sizeof txt);
     if (consulta_lista(li, r.resistencia, NULL) == LISTA_OK) {
+        registra(LOG_AVISO, "NOVO", txt, "JÁ CADASTRADO", NULL);
         ui_caixa_feedback(UI_ERRO, "Resistor já cadastrado",
                           "%s já cadastrado - use [6] Repor", txt);
         voltar_ao_menu();
         return;
     }
-    if (!ler_quantidade("Quantidade : ", 0, &r.quantidade)) {
-        feedback_cancelado();
+    if (!ler_quantidade("NOVO", txt, "Quantidade : ", 0, &r.quantidade)) {
+        feedback_cancelado("NOVO", txt);
         return;
     }
 
     res = insere_lista_ordenada(li, r);
+    if (res == LISTA_OK)
+        registra(LOG_INFO, "NOVO", txt, "OK", "qtd %d", r.quantidade);
+    else
+        registra(LOG_ERRO, "NOVO", txt,
+                 res == LISTA_ERRO ? "SEM MEMÓRIA" : "VALOR INVÁLIDO", "qtd %d", r.quantidade);
     if (res == LISTA_OK)
         ui_caixa_feedback(UI_SUCESSO, "Resistor inserido",
                           "Resistor %s inserido (%d un.)", txt, r.quantidade);
@@ -604,17 +661,20 @@ void tela_remover(Lista *li)
     abre_tela("Remover tipo de resistor");
     ui_dica("(Enter vazio cancela)");
     putchar('\n');
-    if (!ler_cadastrado(li, &ohms, txt, &qtd)) return;
+    if (!ler_cadastrado("REMOVER", li, &ohms, txt, &qtd)) return;
 
     if (!ui_confirmar("Remover %s (%d %s) do estoque?", txt, qtd,
                       plural(qtd, "unidade", "unidades"))) {
-        feedback_cancelado();
+        feedback_cancelado("REMOVER", txt);
         return;
     }
-    if (remove_lista(li, ohms) == LISTA_OK)
+    if (remove_lista(li, ohms) == LISTA_OK) {
+        registra(LOG_INFO, "REMOVER", txt, "OK", "qtd %d", qtd);
         ui_caixa_feedback(UI_SUCESSO, "Resistor removido", "%s removido do estoque", txt);
-    else
+    } else {
+        registra(LOG_AVISO, "REMOVER", txt, "NÃO ENCONTRADO", NULL);
         ui_caixa_feedback(UI_ERRO, "Falha ao remover", "%s não está no estoque", txt);
+    }
     voltar_ao_menu();
 }
 
@@ -652,6 +712,8 @@ void tela_listar(const Lista *li)
     long long pecas = total_pecas(li);
 
     abre_tela("Estoque atual");
+    registra(LOG_INFO, "LISTAR", NULL, "OK", "%d %s %s %lld %s", tipos,
+             plural(tipos, "tipo", "tipos"), UI_PONTO, pecas, plural(pecas, "peça", "peças"));
     if (lista_vazia(li)) {
         ui_mensagem(UI_INFO, "Estoque vazio. Use [1] Novo.");
         voltar_ao_menu();
@@ -685,14 +747,15 @@ void tela_consultar(Lista *li)
     abre_tela("Consultar estoque");
     ui_dica("(Enter vazio cancela)");
     putchar('\n');
-    if (!ler_resistencia(&ohms)) {
-        feedback_cancelado();
+    if (!ler_resistencia("CONSULTAR", &ohms)) {
+        feedback_cancelado("CONSULTAR", NULL);
         return;
     }
     formata_resistencia(ohms, txt, sizeof txt);
     if (consulta_lista(li, ohms, &qtd) == LISTA_OK) {
         char linha[96];
         const char *linhas[1];
+        registra(LOG_INFO, "CONSULTAR", txt, "OK", "qtd %d", qtd);
         snprintf(linha, sizeof linha, "%s%s%s %s %s%d%s %s", ui_cor(UI_COR_NEGRITO), txt,
                  ui_cor(UI_COR_RESET), UI_SETA,
                  qtd == 0 ? ui_cor(UI_COR_VERMELHO) : ui_cor(UI_COR_VERDE), qtd,
@@ -701,6 +764,7 @@ void tela_consultar(Lista *li)
         putchar('\n');
         ui_caixa(UI_MOLDURA_SIMPLES, UI_COR_BORDA, NULL, NULL, linhas, 1, 26);
     } else {
+        registra(LOG_AVISO, "CONSULTAR", txt, "NÃO ENCONTRADO", NULL);
         ui_mensagem(UI_ERRO, "%s não está no estoque", txt);
     }
     voltar_ao_menu();
@@ -717,14 +781,24 @@ void tela_retirar(Lista *li)
     abre_tela("Retirar do estoque");
     ui_dica("(Enter vazio cancela)");
     putchar('\n');
-    if (!ler_cadastrado(li, &ohms, txt, &atual)) return;
+    if (!ler_cadastrado("RETIRAR", li, &ohms, txt, &atual)) return;
     ui_dica("Em estoque: %d %s", atual, plural(atual, "unidade", "unidades"));
-    if (!ler_quantidade("Quantidade a retirar: ", 1, &qtd)) {
-        feedback_cancelado();
+    if (!ler_quantidade("RETIRAR", txt, "Quantidade a retirar: ", 1, &qtd)) {
+        feedback_cancelado("RETIRAR", txt);
         return;
     }
 
     res = retira_estoque(li, ohms, qtd);
+    if (res == LISTA_OK && atual - qtd == 0)
+        registra(LOG_AVISO, "RETIRAR", txt, "OK - ESTOQUE ZERADO", "-%d (%d%s0)", qtd, atual,
+                 UI_SETA);
+    else if (res == LISTA_OK)
+        registra(LOG_INFO, "RETIRAR", txt, "OK", "-%d (%d%s%d)", qtd, atual, UI_SETA,
+                 atual - qtd);
+    else if (res == LISTA_SEM_ESTOQUE)
+        registra(LOG_AVISO, "RETIRAR", txt, "SEM ESTOQUE", "-%d (tem %d)", qtd, atual);
+    else
+        registra(LOG_ERRO, "RETIRAR", txt, "QUANTIDADE INVÁLIDA", "-%d", qtd);
     if (res == LISTA_OK && atual - qtd == 0)
         ui_caixa_feedback(UI_AVISO, "Retirada concluída - estoque zerado",
                           "%s: %d %s 0 unidades", txt, atual, UI_SETA);
@@ -749,14 +823,18 @@ void tela_repor(Lista *li)
     abre_tela("Repor estoque");
     ui_dica("(Enter vazio cancela)");
     putchar('\n');
-    if (!ler_cadastrado(li, &ohms, txt, &atual)) return;
+    if (!ler_cadastrado("REPOR", li, &ohms, txt, &atual)) return;
     ui_dica("Em estoque: %d %s", atual, plural(atual, "unidade", "unidades"));
-    if (!ler_quantidade("Quantidade a repor: ", 1, &qtd)) {
-        feedback_cancelado();
+    if (!ler_quantidade("REPOR", txt, "Quantidade a repor: ", 1, &qtd)) {
+        feedback_cancelado("REPOR", txt);
         return;
     }
 
     res = repor_estoque(li, ohms, qtd);
+    if (res == LISTA_OK)
+        registra(LOG_INFO, "REPOR", txt, "OK", "+%d (%d%s%d)", qtd, atual, UI_SETA, atual + qtd);
+    else
+        registra(LOG_ERRO, "REPOR", txt, "LIMITE EXCEDIDO", "+%d (tem %d)", qtd, atual);
     if (res == LISTA_OK)
         ui_caixa_feedback(UI_SUCESSO, "Reposição concluída",
                           "%s: %d %s %d %s", txt, atual, UI_SETA, atual + qtd,
@@ -778,6 +856,7 @@ void tela_reinicializar(Lista *li)
     putchar('\n');
     if (lista_vazia(li)) {
         reinicializa_lista(li);
+        registra(LOG_INFO, "REINICIALIZAR", NULL, "OK", "0 tipos");
         ui_caixa_feedback(UI_INFO, "Estoque inicializado", "Lista vazia e pronta para uso");
         voltar_ao_menu();
         return;
@@ -786,10 +865,12 @@ void tela_reinicializar(Lista *li)
                       NULL);
     if (!ui_confirmar("Apagar TODOS os %d %s (%lld %s)?", tipos, plural(tipos, "tipo", "tipos"),
                       pecas, plural(pecas, "peça", "peças"))) {
-        feedback_cancelado();
+        feedback_cancelado("REINICIALIZAR", NULL);
         return;
     }
     reinicializa_lista(li);
+    registra(LOG_INFO, "REINICIALIZAR", NULL, "OK", "%d %s (%lld %s)", tipos,
+             plural(tipos, "tipo", "tipos"), pecas, plural(pecas, "peça", "peças"));
     ui_caixa_feedback(UI_SUCESSO, "Estoque reinicializado", "%d %s removidos (%lld %s)", tipos,
                       plural(tipos, "tipo", "tipos"), pecas,
                       plural(pecas, "peça", "peças"));
@@ -801,6 +882,7 @@ void tela_reinicializar(Lista *li)
 void tela_diferencial(void)
 {
     abre_tela("Diferencial");
+    registra(LOG_INFO, "DIFERENCIAL", NULL, "EM BREVE", NULL);
     ui_caixa_feedback(UI_INFO, "Em breve", "Funcionalidade diferencial em desenvolvimento");
     voltar_ao_menu();
 }

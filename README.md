@@ -92,7 +92,8 @@ Atenção: `m` minúsculo é mili e `M` maiúsculo é mega. A faixa aceita vai d
 src/
 ├── lista.h / lista.c             TAD lista dinâmica ordenada (chave: resistência)
 ├── formatacao.h / formatacao.c   leitura "4k7" -> Ω e impressão por grandeza
-├── main.c                        cria a lista e conduz as telas
+├── log.h / log.c                 registro das ações em logs/ohmflow_AAAA-MM-DD.log
+├── main.c                        cria a lista, abre/fecha a sessão de log e conduz as telas
 └── ui/
     ├── ui.h / ui.c               cores ANSI, molduras, tabelas, leitura de entrada
     └── telas.h / telas.c         boas-vindas, menu, telas das funções, feedback, encerramento
@@ -100,6 +101,7 @@ tests/
 ├── test_framework.h              mini framework de testes (sem dependências)
 ├── test_lista.c                  testes da lista
 ├── test_formatacao.c             testes de parse e formatação
+├── test_log.c                    testes do log (formato, sessão, falhas de I/O)
 ├── test_ui.c                     testes de alinhamento, cores e espera por Enter
 ├── test_telas.c                  testes da navegação do menu
 ├── test_novo.c                   testes da tela Novo (parse_item, inserção em massa) e ajustes de tela
@@ -108,7 +110,7 @@ tests/
 
 ## Como os dados são guardados
 
-Os dados ficam **somente na memória RAM**, em uma **lista simplesmente encadeada** (não é array). Não há arquivo nem banco de dados: ao encerrar o programa, tudo é liberado e o estoque é perdido.
+Os dados ficam **somente na memória RAM**, em uma **lista simplesmente encadeada** (não é array). Não há arquivo nem banco de dados: ao encerrar o programa, tudo é liberado e o estoque é perdido. O que fica gravado em disco é só o [registro de ações](#registro-de-ações-logs), não o estoque.
 
 Cada nó guarda um resistor e o ponteiro para o próximo. A lista é mantida **sempre em ordem crescente de resistência**, porque a inserção já coloca o nó na posição certa. Nada é reorganizado depois.
 
@@ -315,6 +317,36 @@ Detalhes:
 
 O texto digitado é convertido para Ω por um único `strtod` sobre a forma decimal com expoente (`"470m"` vira `"470.0e-3"`). Assim, grafias diferentes do mesmo valor (`470m`, `0.47`, `0,47`) geram exatamente o mesmo `double`. Multiplicar por `0,001` não garantia isso, porque esse número não é exato em binário. A comparação com tolerância (`mesma_resistencia`) continua como rede de segurança.
 
+## Registro de ações (logs)
+
+Cada execução do programa é uma **sessão** gravada no arquivo de log do dia, `ohmflow_AAAA-MM-DD.log` (texto UTF-8; várias sessões no mesmo dia vão sendo acrescentadas). Toda ação vira uma linha: inserir, remover, listar, consultar, retirar, repor, reinicializar, e também cancelamentos, valores inválidos e opções de menu inválidas.
+
+```text
+================================================================
+ OhmFlow — sessão iniciada em 27/10/2026 14:03:12
+================================================================
+27/10/2026 14:03:20 | INFO  | NOVO          | 4,7 kΩ     | qtd 50               | OK
+27/10/2026 14:03:41 | INFO  | REPOR         | 4,7 kΩ     | +10 (50→60)          | OK
+27/10/2026 14:04:01 | AVISO | RETIRAR       | 4,7 kΩ     | -70 (tem 60)         | SEM ESTOQUE
+27/10/2026 14:04:15 | ERRO  | NOVO          | "abc"      | -                    | VALOR INVÁLIDO
+27/10/2026 14:05:02 | INFO  | REINICIALIZAR | -          | 3 tipos (68 peças)   | OK
+================================================================
+ OhmFlow — sessão encerrada em 27/10/2026 14:06:10 (3m 0s)
+================================================================
+```
+
+Colunas: data e hora, nível (`INFO`, `AVISO`, `ERRO`), ação, resistor (ou o texto digitado, entre aspas), detalhe e resultado. Cada linha é gravada na hora, então o registro sobrevive mesmo se a janela for fechada.
+
+Onde fica a pasta `logs`:
+
+| Como o programa foi gerado | Pasta |
+| --- | --- |
+| `make` / `make run` (desenvolvimento) | `logs\` na pasta atual (ignorada pelo git) |
+| Instalador (`make setup`, compilado com `-DOHM_LOGS_APPDATA`) | `%APPDATA%\OhmFlow\logs\` |
+| Variável `OHMFLOW_LOGS_DIR` definida (usada pelo `make e2e`) | a pasta indicada |
+
+Se a pasta não puder ser criada, o programa avisa uma vez e segue normalmente, sem registro.
+
 ## Compilar a partir do código: pré-requisitos (Windows 10/11)
 
 Esta parte é para quem vai **desenvolver** ou compilar. Para só usar, veja a [Instalação rápida](#instalação-rápida-windows-1011).
@@ -425,6 +457,8 @@ make setup VERSAO=1.2.0    # define a versão do setup e do exe (Propriedades > 
 make teste-setup           # gera, instala em silêncio, roda o programa instalado e desinstala
 ```
 
+O exe que vai no instalador é compilado à parte (`dist\instalador\ohmflow.exe`, com `-DOHM_LOGS_APPDATA`) e grava os logs em `%APPDATA%\OhmFlow\logs`, já que a pasta de instalação pode não aceitar escrita. O `make teste-setup` confere isso usando um `APPDATA` temporário.
+
 O `make setup` encontra o `ISCC.exe` no `Path`, em `C:\Program Files (x86)\Inno Setup 6` ou em `%LOCALAPPDATA%\Programs\Inno Setup 6` (onde o winget instala por usuário). Ao trocar a `VERSAO`, rode `make clean` antes, para o recurso de versão do exe ser recompilado.
 
 No CI, cada push gera o instalador como *artifact* (`ohm_flow_setup`). Um push de tag `v*` (ex.: `git tag v1.0.0; git push origin v1.0.0`) cria o Release no GitHub com o `ohm_flow_setup.exe` anexado.
@@ -443,8 +477,8 @@ No CI, cada push gera o instalador como *artifact* (`ohm_flow_setup`). Um push d
 No PowerShell, na pasta do projeto:
 
 ```powershell
-make test       # testes unitários (lista, formatação, ui, telas)
-make e2e        # roda o programa com tests/e2e/entrada.txt e confere tests/e2e/esperado.txt
+make test       # testes unitários (lista, formatação, log, ui, telas)
+make e2e        # roda o programa com tests/e2e/entrada.txt, confere tests/e2e/esperado.txt e o log em build/e2e_logs
 make cppcheck   # análise estática
 ```
 

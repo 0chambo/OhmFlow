@@ -16,3 +16,5 @@ CLAUDE.md
 AGENTS.md
 GEMINI.md
 .claude/
+# Logs gerados ao rodar o programa (make run)
+logs/

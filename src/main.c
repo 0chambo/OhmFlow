@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "lista.h"
+#include "log.h"
 #include "ui.h"
 #include "telas.h"
 
@@ -23,6 +24,10 @@ int main(void)
         fprintf(stderr, "Erro: memória insuficiente para criar a lista.\n");
         return EXIT_FAILURE;
     }
+    /* cada execução é uma sessão no log do dia (logs/ohmflow_AAAA-MM-DD.log) */
+    if (!log_iniciar())
+        ui_mensagem(UI_AVISO, "Não foi possível abrir o arquivo de log; "
+                    "seguindo sem registro.");
 
     tela_boas_vindas();
     while ((opcao = tela_menu(estoque)) != OPCAO_SAIR) {
@@ -39,6 +44,7 @@ int main(void)
         }
     }
     tela_encerramento(estoque);
+    log_encerrar();
 
     libera_lista(estoque);
     return EXIT_SUCCESS;
