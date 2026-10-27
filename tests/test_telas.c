@@ -489,6 +489,111 @@ static void teste_historico_sem_checkpoint_nao_pergunta(void)
 
 /* ---- main ---------------------------------------------------------------- */
 
+/* ---- boas-vindas: banner ANSI Shadow ----------------------------------- */
+
+static void teste_banner_sem_cor_literal(void)
+{
+#ifndef OHM_ASCII
+    char buf[BANNER_TAM_LINHA];
+    ui_definir_cor(0);
+    banner_linha(0, buf, sizeof buf);
+    ASSERT_STR_EQ(" \xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+                  "\xE2\x95\x97 \xE2\x96\x88\xE2\x96\x88\xE2\x95\x97  \xE2\x96\x88\xE2\x96\x88"
+                  "\xE2\x95\x97\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97   \xE2\x96\x88"
+                  "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+                  "\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97\xE2\x96\x88"
+                  "\xE2\x96\x88\xE2\x95\x97      \xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88"
+                  "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97 \xE2\x96\x88\xE2\x96\x88\xE2\x95\x97    "
+                  "\xE2\x96\x88\xE2\x96\x88\xE2\x95\x97", buf);
+    ASSERT_TRUE(strchr(buf, '\033') == NULL);
+#endif
+}
+
+static void teste_banner_largura(void)
+{
+#ifndef OHM_ASCII
+    char buf[BANNER_TAM_LINHA];
+    int i;
+    for (i = 0; i < BANNER_LINHAS; i++) {
+        ui_definir_cor(0);
+        ASSERT_EQ_INT(BANNER_COLUNAS, banner_linha(i, buf, sizeof buf));
+        ASSERT_EQ_INT(BANNER_COLUNAS, ui_largura(buf));
+        ui_definir_cor(1);
+        ASSERT_EQ_INT(BANNER_COLUNAS, banner_linha(i, buf, sizeof buf));
+        ASSERT_EQ_INT(BANNER_COLUNAS, ui_largura(buf));
+    }
+    ui_definir_cor(0);
+#endif
+}
+
+static void teste_banner_cores(void)
+{
+#ifndef OHM_ASCII
+    char buf[BANNER_TAM_LINHA];
+    ui_definir_cor(1);
+    banner_linha(0, buf, sizeof buf);                         /* topo creme      */
+    ASSERT_TRUE(strstr(buf, "\033[38;2;255;232;176m\xE2\x96\x88") != NULL);
+    ASSERT_TRUE(strstr(buf, "\033[38;2;138;74;0m\xE2\x95\x97") != NULL); /* sombra */
+    banner_linha(BANNER_LINHAS - 2, buf, sizeof buf);         /* base laranja    */
+    ASSERT_TRUE(strstr(buf, "\033[38;2;255;135;0m\xE2\x96\x88") != NULL);
+    ASSERT_TRUE(strstr(buf, "\033[0m") != NULL);              /* termina com reset */
+    ui_definir_cor(0);
+#endif
+}
+
+static void teste_banner_linha_invalida(void)
+{
+    char buf[BANNER_TAM_LINHA];
+    ASSERT_EQ_INT(0, banner_linha(-1, buf, sizeof buf));
+    ASSERT_STR_EQ("", buf);
+    ASSERT_EQ_INT(0, banner_linha(BANNER_LINHAS, buf, sizeof buf));
+    ASSERT_STR_EQ("", buf);
+}
+
+static void teste_banner_fallback(void)
+{
+#ifdef OHM_ASCII
+    ASSERT_EQ_INT(0, banner_disponivel(200));
+#else
+    ASSERT_EQ_INT(1, banner_disponivel(80));
+    ASSERT_EQ_INT(1, banner_disponivel(BANNER_COLUNAS + 2));
+    ASSERT_EQ_INT(0, banner_disponivel(BANNER_COLUNAS + 1)); /* estreito: logo antigo */
+    ASSERT_EQ_INT(0, banner_disponivel(40));
+#endif
+}
+
+/* ---- listar: barra de proporção ---------------------------------------- */
+
+static void teste_listar_mostra_porcentagem(void)
+{
+    char buf[16384];
+    FILE *f = abre_temp();
+    Lista *li;
+    Resistor a = { 220.0, 30 }, b = { 4700.0, 10 };
+    if (f == NULL) return;
+
+    li = cria_lista();
+    insere_lista_ordenada(li, a);
+    insere_lista_ordenada(li, b);
+    ui_init();
+    ui_definir_interativo(0);
+    ui_definir_saida(f);
+    ui_definir_cor(0);
+    log_definir_pasta("build/test_listar_tmp/logs");
+    tela_listar(li);
+    log_definir_pasta(NULL);
+
+    conteudo(f, buf, sizeof buf);
+    ui_definir_saida(stdout);
+    fclose(f);
+    libera_lista(li);
+
+    ASSERT_TRUE(strstr(buf, "Estoque") != NULL);
+    ASSERT_TRUE(strstr(buf, "75%") != NULL);
+    ASSERT_TRUE(strstr(buf, "25%") != NULL);
+    ASSERT_TRUE(strstr(buf, "75%") < strstr(buf, "25%")); /* ordem crescente */
+}
+
 int main(void)
 {
     printf("=== test_telas ===\n");
@@ -521,6 +626,13 @@ int main(void)
     RUN_TEST(teste_historico_volta_ao_checkpoint);
     RUN_TEST(teste_historico_checkpoint_enter_mantem);
     RUN_TEST(teste_historico_sem_checkpoint_nao_pergunta);
+
+    RUN_TEST(teste_banner_sem_cor_literal);
+    RUN_TEST(teste_banner_largura);
+    RUN_TEST(teste_banner_cores);
+    RUN_TEST(teste_banner_linha_invalida);
+    RUN_TEST(teste_banner_fallback);
+    RUN_TEST(teste_listar_mostra_porcentagem);
 
     return tf_resumo("telas");
 }

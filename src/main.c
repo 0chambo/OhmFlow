@@ -21,6 +21,7 @@ int main(void)
     int opcao;
 
     ui_init();
+    ui_bufferizar_saida(); /* quadros do menu saem numa escrita só */
     ui_definir_centralizado(ui_interativo()); /* telas no centro só no terminal */
     estoque = cria_lista(); /* inicialização da lista (vazia) */
     /* pilhas de desfazer/refazer da sessão, usadas pelo [9] Histórico */
