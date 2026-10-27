@@ -63,11 +63,16 @@ void        ui_definir_saida(FILE *f);
 void        ui_definir_cor(int ativa);
 int         ui_cor_ativa(void);
 int         ui_interativo(void);
+void        ui_definir_interativo(int ativo); /* testes: força (ou não) modo terminal */
 const char *ui_cor(int cor);
 
 /* Tela */
 void ui_limpar_tela(void);
 void ui_pausar(const char *msg);
+void ui_esperar_enter(void); /* espera Enter no terminal, sem ecoar o que for digitado */
+/* Consome teclas de `proxima` até Enter ('\r' ou '\n'); 1 = Enter, 0 = EOF.
+ * Prefixo 0/224 (tecla estendida do _getch) descarta também o byte seguinte. */
+int  ui_espera_enter_de(int (*proxima)(void *ctx), void *ctx);
 int  ui_colunas_terminal(void);
 int  ui_linhas_terminal(void);
 void ui_cursor(int visivel); /* 1 = mostra, 0 = esconde */

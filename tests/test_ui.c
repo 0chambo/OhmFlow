@@ -262,6 +262,53 @@ static void teste_caixa_centralizada_alinhada(void)
     fclose(f);
 }
 
+/* ---- espera por Enter (issue #29) ------------------------------------ */
+
+/* Fonte falsa de teclas: devolve a sequência e depois EOF */
+typedef struct {
+    const int *teclas;
+    int n, pos;
+} Teclas;
+
+static int teclas_proxima(void *ctx)
+{
+    Teclas *t = ctx;
+    return t->pos < t->n ? t->teclas[t->pos++] : EOF;
+}
+
+static void teste_espera_enter_descarta_texto(void)
+{
+    static const int seq[] = { 'a', 'b', 'c', '\r', 'x' };
+    Teclas t = { seq, 5, 0 };
+    ASSERT_EQ_INT(1, ui_espera_enter_de(teclas_proxima, &t));
+    ASSERT_EQ_INT(4, t.pos); /* parou no Enter: 'x' ficou para depois */
+}
+
+static void teste_espera_enter_aceita_lf(void)
+{
+    static const int seq[] = { 'z', '\n' };
+    Teclas t = { seq, 2, 0 };
+    ASSERT_EQ_INT(1, ui_espera_enter_de(teclas_proxima, &t));
+    ASSERT_EQ_INT(2, t.pos);
+}
+
+static void teste_espera_enter_tecla_estendida(void)
+{
+    /* 0/224 + código: o segundo byte (13 aqui) não pode contar como Enter */
+    static const int seq[] = { 224, 13, 0, 13, 'q', 13 };
+    Teclas t = { seq, 6, 0 };
+    ASSERT_EQ_INT(1, ui_espera_enter_de(teclas_proxima, &t));
+    ASSERT_EQ_INT(6, t.pos);
+}
+
+static void teste_espera_enter_eof(void)
+{
+    static const int seq[] = { 'a', 'b' };
+    Teclas t = { seq, 2, 0 };
+    ASSERT_EQ_INT(0, ui_espera_enter_de(teclas_proxima, &t)); /* sem Enter: não trava */
+    ASSERT_EQ_INT(2, t.pos);
+}
+
 int main(void)
 {
     ui_init();
@@ -280,5 +327,9 @@ int main(void)
     RUN_TEST(teste_cores_retro_novas);
     RUN_TEST(teste_largura_terminal);
     RUN_TEST(teste_caixa_centralizada_alinhada);
+    RUN_TEST(teste_espera_enter_descarta_texto);
+    RUN_TEST(teste_espera_enter_aceita_lf);
+    RUN_TEST(teste_espera_enter_tecla_estendida);
+    RUN_TEST(teste_espera_enter_eof);
     return tf_resumo("test_ui");
 }

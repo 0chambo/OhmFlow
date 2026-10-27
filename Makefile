@@ -42,7 +42,7 @@ SRC_LIB   = src/lista.c src/formatacao.c src/ui/ui.c src/ui/telas.c
 SRC_MAIN  = src/main.c
 HEADERS   = $(wildcard src/*.h src/ui/*.h)
 BIN       = $(DIST)/ohmflow$(EXE)
-TESTES    = test_lista test_formatacao test_ui test_telas
+TESTES    = test_lista test_formatacao test_ui test_telas test_novo
 TEST_BINS = $(addprefix $(BUILD)/,$(addsuffix $(EXE),$(TESTES)))
 
 E2E_ENTRADA  = tests/e2e/entrada.txt
