@@ -35,25 +35,6 @@ Se for uma função só: **#2 Série/paralelo**. Usa a lista ordenada de verdade
 
 ## Ideias em detalhe
 
-### 1. Resistor mais próximo / substituto
-
-**O que faz:** o usuário digita um valor alvo (ex.: `5k`). Se ele existe no estoque, mostra a quantidade. Se não existe ou está zerado, mostra o **vizinho menor e o vizinho maior** com estoque e o erro percentual de cada um.
-
-**Por que encaixa:** a lista é ordenada, então os vizinhos ficam lado a lado. `localiza` já para no primeiro nó ≥ alvo; o anterior é o vizinho menor. A busca para cedo, como em Consultar (`lista_passos` pode ser mostrado de novo).
-
-**Exemplo de saída:**
-
-```text
-Alvo: 5 kΩ (não cadastrado)
-  Menor: 4,7 kΩ  (12 un.)   erro -6,0 %
-  Maior: 5,6 kΩ  ( 3 un.)   erro +12,0 %
-Sugestão: 4,7 kΩ
-```
-
-**Implementação:** nova função `vizinhos_lista(const Lista*, double alvo, Resistor *menor, Resistor *maior)` em `lista.c`. Os testes cobrem: lista vazia, alvo menor que todos, maior que todos, exato e vizinho com quantidade 0 (pulado).
-
----
-
 ### 4. Desfazer última operação (pilha)
 
 **O que faz:** cada Inserir, Remover, Retirar, Repor e Reinicializar empilha o que foi feito. A opção "Desfazer" desempilha e reverte a última operação, mostrando o que foi revertido. Pode haver também "Ver histórico", que lista a pilha do topo para a base.
