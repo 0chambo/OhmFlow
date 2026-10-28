@@ -16,20 +16,8 @@ A Tabela 1 compara as ideias por esforço, quanto mostram de estrutura de dados 
 
 | # | Ideia | Esforço | Estrutura de dados | Impacto na demo | Arquivos novos/alterados |
 | --- | --- | :---: | :---: | :---: | --- |
-| 1 | Resistor mais próximo / substituto | Baixo | Alto | Alto | `lista.c`, `telas.c` |
-| 4 | Desfazer última operação (pilha) | Médio | **Muito alto** | Alto | `historico.c` (novo), `main.c`, `telas.c` |
 | 8 | Alerta de estoque baixo | Baixo | Baixo | Médio | `lista.c`, `telas.c` |
 | 9 | Salvar/carregar estoque em arquivo | Médio | Baixo | Alto | `arquivo.c` (novo), `main.c`, `telas.c` |
-
-**Recomendação:** a opção 8 vira um **submenu "Ferramentas do laboratório"** com 2 ou 3 itens desta lista. Isso dá mais especificidade do que uma função solta. Combinações que funcionam bem juntas:
-
-- **A — foco em estrutura de dados:** #1 Mais próximo + #4 Desfazer (pilha) + #5 Faixa. Acrescenta uma segunda estrutura (pilha) ao relatório e explora a ordenação da lista.
-- **B — foco em eletrônica:** #1 Mais próximo + #2 Série/paralelo + #6 Código de cores. É o mais "específico de laboratório" e o mais visual na demo.
-
-Se for uma função só: **#2 Série/paralelo**. Usa a lista ordenada de verdade (busca de pares), resolve um problema real do almoxarifado ("não tenho 5 kΩ, que dois resistores do estoque dão isso?") e rende uma boa explicação no relatório.
-
-> [!NOTE]
-> **Observação — ideias favoritas (Grolla):** as preferidas são a **#4 Desfazer última operação (pilha)**, a **#8 Alerta de estoque baixo**, a **#9 Salvar/carregar estoque em arquivo**. Para a #9, ver também a [evolução com SQLite](#evolução-futura-banco-local-com-sqlite) prevista para uma versão mais robusta.
 
 ---
 
@@ -51,23 +39,6 @@ Sugestão: 4,7 kΩ
 ```
 
 **Implementação:** nova função `vizinhos_lista(const Lista*, double alvo, Resistor *menor, Resistor *maior)` em `lista.c`. Os testes cobrem: lista vazia, alvo menor que todos, maior que todos, exato e vizinho com quantidade 0 (pulado).
-
----
-
-### 4. Desfazer última operação (pilha)
-
-**O que faz:** cada Inserir, Remover, Retirar, Repor e Reinicializar empilha o que foi feito. A opção "Desfazer" desempilha e reverte a última operação, mostrando o que foi revertido. Pode haver também "Ver histórico", que lista a pilha do topo para a base.
-
-**Por que encaixa:** traz uma **segunda estrutura de dados dinâmica** (pilha encadeada) para o projeto. O relatório tem que "listar todas as estruturas de dados", e esta é a ideia que mais acrescenta ali. Também mostra a diferença LIFO (pilha) × lista ordenada.
-
-**Detalhes de projeto:**
-
-- Nó da pilha: `{ tipo_operacao, Resistor antes, Resistor depois }`.
-- Reinicializar precisa guardar a lista inteira (cópia) ou ficar fora do desfazer. Mais simples: limpar a pilha ao reinicializar, avisando o usuário.
-- A pilha é liberada ao sair (cada `malloc` com o seu `free`, regra do AGENTS.md).
-- Para manter lógica e interface separadas, as telas registram a operação **depois** de a lista confirmar `LISTA_OK`.
-
-**Esforço:** médio. Mexe em todas as telas de escrita, mas cada mudança é pequena.
 
 ---
 
